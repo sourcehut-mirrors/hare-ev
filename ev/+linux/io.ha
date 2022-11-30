@@ -36,7 +36,7 @@ export fn readv(
 	return req { ... };
 };
 
-fn readv_finish(file: *file, ev: *rt::epoll_event) void = {
+fn readv_ready(file: *file, ev: *rt::epoll_event) void = {
 	assert(file.op == op::READV);
 	assert(ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0);
 	assert(file.cb != null);
@@ -88,7 +88,7 @@ export fn writev(
 	return req { ... };
 };
 
-fn writev_finish(file: *file, ev: *rt::epoll_event) void = {
+fn writev_ready(file: *file, ev: *rt::epoll_event) void = {
 	assert(file.op == op::WRITEV && ev.events & rt::EPOLLOUT != 0);
 	assert(file.cb != null);
 	const r = io::writev(file.fd, file.vec...);

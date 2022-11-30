@@ -89,9 +89,9 @@ export fn dispatch(
 		case op::NONE =>
 			abort("Invalid pending operation");
 		case op::READV =>
-			readv_finish(file, ev);
+			readv_ready(file, ev);
 		case op::WRITEV =>
-			writev_finish(file, ev);
+			writev_ready(file, ev);
 		};
 	};
 
