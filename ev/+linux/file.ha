@@ -2,8 +2,24 @@ use errors;
 use io;
 use rt;
 
+export type op = enum {
+	NONE,
+	READV,
+	WRITEV,
+};
+
 export type file = struct {
 	fd: io::file,
+	ev: *loop,
+	// Pending operation on this file object
+	op: op,
+	callback: nullable *void,
+
+	// Operation-specific data
+	vbuf: rt::iovec,
+	union {
+		vec: []rt::iovec,
+	},
 };
 
 // Registers a file descriptor with an event loop.
@@ -13,6 +29,9 @@ export fn register(
 ) (*file | errors::error) = {
 	const file = alloc(file {
 		fd = fd,
+		ev = loop,
+		op = op::NONE,
+		...
 	});
 
 	let ev = rt::epoll_event {
@@ -38,4 +57,16 @@ export fn unregister(loop: *loop, file: *file) void = {
 	// was never registered, so assert on error.
 	rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
 	free(file);
+};
+
+// Modifies the epoll events for a given file. For internal use.
+fn filemod(file: *file, events: u32) void = {
+	let ev = rt::epoll_event {
+		events = events,
+		...
+	};
+	ev.data.ptr = file;
+	// This can only fail under conditions associated with EPOLLEXCLUSIVE,
+	// which we do not support.
+	rt::epoll_ctl(file.ev.fd, rt::EPOLL_CTL_MOD, file.fd, &ev)!;
 };
