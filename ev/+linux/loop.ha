@@ -5,7 +5,7 @@ use time;
 use types;
 
 export type loop = struct {
-	epoll: io::file,
+	fd: io::file,
 	events: []rt::epoll_event,
 };
 
@@ -20,7 +20,7 @@ export fn newloop() (loop | errors::error) = {
 	};
 
 	return loop {
-		epoll = fd,
+		fd = fd,
 		events = [],
 	};
 };
@@ -28,7 +28,7 @@ export fn newloop() (loop | errors::error) = {
 // Frees resources associated with an event loop. Must only be called once per
 // event loop object.
 export fn loop_finish(loop: *loop) void = {
-	io::close(loop.epoll)!;
+	io::close(loop.fd)!;
 };
 
 // Returns an [[io::file]] for this event loop which can be polled on when
@@ -36,7 +36,7 @@ export fn loop_finish(loop: *loop) void = {
 // loops. The exact semantics of this function are platform-specific, and it may
 // not be available for all implementations.
 export fn loop_file(loop: *loop) io::file = {
-	return loop.epoll;
+	return loop.fd;
 };
 
 // Dispatches the event loop. A duration of -1 specifies an indefinite timeout,
@@ -65,7 +65,7 @@ export fn dispatch(
 	const maxev = len(loop.events);
 	assert(maxev <= types::INT_MAX: size, "ev::dispatch: too many events");
 	const events = rt::epoll_pwait(
-		loop.epoll,
+		loop.fd,
 		&loop.events[0],
 		maxev: int,
 		millis,
