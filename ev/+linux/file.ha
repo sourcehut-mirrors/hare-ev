@@ -62,7 +62,7 @@ export fn unregister(loop: *loop, file: *file) void = {
 // Modifies the epoll events for a given file. For internal use.
 fn filemod(file: *file, events: u32) void = {
 	let ev = rt::epoll_event {
-		events = events,
+		events = events | rt::EPOLLONESHOT,
 		...
 	};
 	ev.data.ptr = file;
