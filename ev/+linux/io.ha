@@ -4,7 +4,8 @@ use rt;
 // A callback for a [[read]] or [[readv]] operation.
 export type readcb = fn(file: *file, result: (size | io::EOF | io::error)) void;
 
-// Schedules a read operation on a file object.
+// Schedules a read operation on a file object. The provided buffer must be
+// valid for the duration of the read operation.
 export fn read(
 	file: *file,
 	cb: *readcb,
@@ -16,7 +17,8 @@ export fn read(
 	return readv(file, cb, vec...);
 };
 
-// Schedules a vectored read operation on a file object.
+// Schedules a vectored read operation on a file object. The provided vectors
+// must be valid for the duration of the read operation.
 export fn readv(
 	file: *file,
 	cb: *readcb,
@@ -54,7 +56,8 @@ fn readv_ready(file: *file, ev: *rt::epoll_event) void = {
 // A callback for a [[write]] or [[writev]] operation.
 export type writecb = fn(file: *file, result: (size | io::error)) void;
 
-// Schedules a write operation on a file object.
+// Schedules a write operation on a file object. The provided buffer must be
+// valid for the duration of the write operation.
 export fn write(
 	file: *file,
 	cb: *writecb,
@@ -66,7 +69,8 @@ export fn write(
 	return writev(file, cb, vec...);
 };
 
-// Schedules a vectored read operation on a file object.
+// Schedules a vectored read operation on a file object. The provided buffer
+// must be valid for the duration of the write operation.
 export fn writev(
 	file: *file,
 	cb: *writecb,
