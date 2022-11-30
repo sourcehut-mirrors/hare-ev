@@ -24,10 +24,19 @@ export fn readv(
 ) req = {
 	assert(file.op == op::NONE);
 	file.op = op::READV;
-	file.callback = cb;
+	file.cb = cb;
 	file.vec = vec;
 	filemod(file, rt::EPOLLOUT);
 	return req { ... };
+};
+
+fn readv_finish(file: *file, ev: *rt::epoll_event) void = {
+	assert(file.op == op::READV && ev.events & rt::EPOLLIN != 0);
+	assert(file.cb != null);
+	const r = io::readv(file.fd, file.vec...);
+	const cb = file.cb: *readcb;
+	cb(file, r);
+	file.op = op::NONE;
 };
 
 // A callback for a [[write]] or [[writev]] operation.
@@ -55,8 +64,17 @@ export fn writev(
 	// time? (yes)
 	assert(file.op == op::NONE);
 	file.op = op::WRITEV;
-	file.callback = cb;
+	file.cb = cb;
 	file.vec = vec;
 	filemod(file, rt::EPOLLOUT);
 	return req { ... };
+};
+
+fn writev_finish(file: *file, ev: *rt::epoll_event) void = {
+	assert(file.op == op::WRITEV && ev.events & rt::EPOLLOUT != 0);
+	assert(file.cb != null);
+	const r = io::writev(file.fd, file.vec...);
+	const cb = file.cb: *writecb;
+	cb(file, r);
+	file.op = op::NONE;
 };

@@ -39,8 +39,9 @@ export fn loop_file(loop: *loop) io::file = {
 	return loop.fd;
 };
 
-// Dispatches the event loop. A duration of -1 specifies an indefinite timeout,
-// and will cause dispatch to block until the next event is available.
+// Dispatches the event loop. A timeout of 0 specifies an indefinite timeout,
+// and will cause dispatch to block until the next event is available. A timeout
+// of -1 will return immediately if no events are available.
 //
 // Portable use of the timeout argument supports only millisecond granularity of
 // up to 24 days (INT_MAX milliseconds). Negative values other than -1 will
@@ -65,10 +66,24 @@ export fn dispatch(
 	const maxev = len(loop.events);
 	assert(maxev <= types::INT_MAX: size, "ev::dispatch: too many events");
 	const events = rt::epoll_pwait(
-		loop.fd,
-		&loop.events[0],
-		maxev: int,
-		millis,
-		null)!;
-	return true;
+		loop.fd, &loop.events[0],
+		maxev: int, millis, null)!;
+
+	for (let i = 0z; i < maxev; i += 1) {
+		const ev = &loop.events[i];
+		const file = ev.data.ptr: *file;
+		if (ev.events == 0) {
+			continue;
+		};
+		switch (file.op) {
+		case op::NONE =>
+			abort("Invalid pending operation");
+		case op::READV =>
+			readv_finish(file, ev);
+		case op::WRITEV =>
+			writev_finish(file, ev);
+		};
+	};
+
+	return events != 0;
 };

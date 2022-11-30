@@ -13,7 +13,7 @@ export type file = struct {
 	ev: *loop,
 	// Pending operation on this file object
 	op: op,
-	callback: nullable *void,
+	cb: nullable *void,
 
 	// Operation-specific data
 	vbuf: rt::iovec,
