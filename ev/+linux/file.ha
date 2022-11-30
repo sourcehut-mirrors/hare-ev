@@ -22,9 +22,11 @@ export type file = struct {
 	user: nullable *void,
 
 	// Operation-specific data
-	vbuf: rt::iovec,
 	union {
-		vec: []rt::iovec,
+		struct {
+			vbuf: rt::iovec,
+			vec: []rt::iovec,
+		},
 	},
 };
 
