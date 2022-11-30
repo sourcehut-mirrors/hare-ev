@@ -8,10 +8,15 @@ export type op = enum {
 	WRITEV,
 };
 
+export type fflags = enum uint {
+	BLOCKING = 1 << 31,
+};
+
 export type file = struct {
 	fd: io::file,
 	ev: *loop,
-	// Pending operation on this file object
+
+	flags: fflags,
 	op: op,
 	cb: nullable *void,
 	user: nullable *void,
@@ -44,6 +49,12 @@ export fn register(
 	case void =>
 		yield;
 	case let err: rt::errno =>
+		if (err: int == rt::EPERM) {
+			// epoll(2) does not support regular files, use blocking
+			// I/O instead
+			file.flags = fflags::BLOCKING;
+			return file;
+		};
 		return errors::errno(err);
 	};
 
@@ -54,10 +65,13 @@ export fn register(
 // with it. Does not close the underlying file descriptor.
 export fn unregister(file: *file) void = {
 	const loop = file.ev;
-	// The only way that this could fail is in the event of a use-after-free
-	// or if the user fucks around and constructs a custom [[file]] which
-	// was never registered, so assert on error.
-	rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
+	if (file.flags & fflags::BLOCKING == 0) {
+		// The only way that this could fail is in the event of a
+		// use-after-free or if the user fucks around and constructs a
+		// custom [[file]] which was never registered, so assert on
+		// error.
+		rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
+	};
 	free(file);
 };
 

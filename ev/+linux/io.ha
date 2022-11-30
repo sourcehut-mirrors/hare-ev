@@ -23,6 +23,12 @@ export fn readv(
 	vec: io::vector...
 ) req = {
 	assert(file.op == op::NONE);
+	if (file.flags & fflags::BLOCKING != 0) {
+		const r = io::readv(file.fd, vec...);
+		cb(file, r);
+		return req { ... };
+	};
+
 	file.op = op::READV;
 	file.cb = cb;
 	file.vec = vec;
@@ -69,6 +75,12 @@ export fn writev(
 	// XXX: Should we support both pending reads and writes at the same
 	// time? (yes)
 	assert(file.op == op::NONE);
+	if (file.flags & fflags::BLOCKING != 0) {
+		const r = io::writev(file.fd, vec...);
+		cb(file, r);
+		return req { ... };
+	};
+
 	file.op = op::WRITEV;
 	file.cb = cb;
 	file.vec = vec;

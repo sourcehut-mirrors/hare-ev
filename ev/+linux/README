@@ -1,0 +1,6 @@
+The ev module provides an event loop. Use [[newloop]] to create an event loop,
+and [[finish]] to finalize it. You may add external I/O sources via functions
+like [[register]] and [[unregister]].
+
+On Linux, ev is implemented with epoll. Note that, on Linux, I/O on regular
+files is always blocking.
