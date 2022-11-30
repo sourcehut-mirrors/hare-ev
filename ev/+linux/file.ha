@@ -14,6 +14,7 @@ export type file = struct {
 	// Pending operation on this file object
 	op: op,
 	cb: nullable *void,
+	user: nullable *void,
 
 	// Operation-specific data
 	vbuf: rt::iovec,
@@ -60,15 +61,26 @@ export fn unregister(file: *file) void = {
 	free(file);
 };
 
+// Sets the user data field on this file object to the provided object.
+export fn setuser(file: *file, user: nullable *void) void = {
+	file.user = user;
+};
+
+// Returns the user data field from this file object. If the field was null, an
+// assertion is raised.
+export fn getuser(file: *file) *void = {
+	return file.user as *void;
+};
+
 // Returns the file descriptor for a given file. Note that ev assumes that it
 // will be responsible for all I/O on the file and any user modifications may
 // cause the event loop to enter an invalid state.
-export fn file_getfd(file: *file) io::file = {
+export fn getfd(file: *file) io::file = {
 	return file.fd;
 };
 
 // Returns the event loop for a given file.
-export fn file_getloop(file: *file) *loop = {
+export fn getloop(file: *file) *loop = {
 	return file.ev;
 };
 
