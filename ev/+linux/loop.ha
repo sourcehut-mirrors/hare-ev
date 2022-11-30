@@ -50,8 +50,8 @@ export fn loop_file(loop: *loop) io::file = {
 // A timeout of -1 will block indefinitely until the next event occurs. A
 // timeout of 0 will cause dispatch to return immediately if no events are
 // available to process. Portable use of the timeout argument supports only
-// millisecond granularity of up to 24 days (INT_MAX milliseconds). Negative
-// values other than -1 will cause the program to abort.
+// millisecond granularity of up to 24 days ([[types::INT_MAX]] milliseconds).
+// Negative values other than -1 will cause the program to abort.
 //
 // Returns false if the loop has been stopped via [[stop]], or true otherwise.
 export fn dispatch(
