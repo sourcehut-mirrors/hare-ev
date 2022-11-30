@@ -7,10 +7,11 @@ use types;
 export type loop = struct {
 	fd: io::file,
 	events: []rt::epoll_event,
+	stop: bool,
 };
 
-// Creates a new event loop. The user must pass the return value to
-// [[loop_finish]] to free associated resources when done using the loop.
+// Creates a new event loop. The user must pass the return value to [[finish]]
+// to free associated resources when done using the loop.
 export fn newloop() (loop | errors::error) = {
 	const fd = match (rt::epoll_create1(rt::EPOLL_CLOEXEC)) {
 	case let fd: int =>
@@ -21,13 +22,17 @@ export fn newloop() (loop | errors::error) = {
 
 	return loop {
 		fd = fd,
-		events = [],
+		// XXX: Should the number of events be customizable?
+		events = alloc([rt::epoll_event { ... }...], 256),
+		stop = false,
 	};
 };
 
 // Frees resources associated with an event loop. Must only be called once per
-// event loop object.
-export fn loop_finish(loop: *loop) void = {
+// event loop object. Calling finish invalidates all I/O objects associated with
+// the event loop.
+export fn finish(loop: *loop) void = {
+	free(loop.events);
 	io::close(loop.fd)!;
 };
 
@@ -39,15 +44,16 @@ export fn loop_file(loop: *loop) io::file = {
 	return loop.fd;
 };
 
-// Dispatches the event loop. A timeout of 0 specifies an indefinite timeout,
-// and will cause dispatch to block until the next event is available. A timeout
-// of -1 will return immediately if no events are available.
+// Dispatches the event loop, waiting for new events and calling their callbacks
+// as appropriate.
 //
-// Portable use of the timeout argument supports only millisecond granularity of
-// up to 24 days (INT_MAX milliseconds). Negative values other than -1 will
-// cause the program to abort.
+// A timeout of -1 will block indefinitely until the next event occurs. A
+// timeout of 0 will cause dispatch to return immediately if no events are
+// available to process. Portable use of the timeout argument supports only
+// millisecond granularity of up to 24 days (INT_MAX milliseconds). Negative
+// values other than -1 will cause the program to abort.
 //
-// Returns false if there are no events to process.
+// Returns false if the loop has been stopped via [[stop]], or true otherwise.
 export fn dispatch(
 	loop: *loop,
 	timeout: time::duration,
@@ -59,17 +65,21 @@ export fn dispatch(
 	} else {
 		yield (timeout / time::MILLISECOND): int;
 	};
-	if (len(loop.events) == 0) {
+	if (loop.stop) {
 		return false;
 	};
+	if (len(loop.events) == 0) {
+		return true;
+	};
+
 	// TODO: Deal with signals
 	const maxev = len(loop.events);
 	assert(maxev <= types::INT_MAX: size, "ev::dispatch: too many events");
-	const events = rt::epoll_pwait(
+	const nevent = rt::epoll_pwait(
 		loop.fd, &loop.events[0],
 		maxev: int, millis, null)!;
 
-	for (let i = 0z; i < maxev; i += 1) {
+	for (let i = 0; i < nevent; i += 1) {
 		const ev = &loop.events[i];
 		const file = ev.data.ptr: *file;
 		if (ev.events == 0) {
@@ -85,5 +95,12 @@ export fn dispatch(
 		};
 	};
 
-	return events != 0;
+	return !loop.stop;
+};
+
+// Signals the loop to stop processing events. If called during a callback, it
+// will cause that invocation of [[dispatch]] to return false. Otherwise, false
+// will be returned only upon the next call to [[dispatch]].
+export fn stop(loop: *loop) void = {
+	loop.stop = true;
 };

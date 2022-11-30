@@ -2,7 +2,7 @@ use io;
 use rt;
 
 // A callback for a [[read]] or [[readv]] operation.
-export type readcb = *fn(file: *file, result: (size | io::EOF | io::error)) void;
+export type readcb = fn(file: *file, result: (size | io::EOF | io::error)) void;
 
 // Schedules a read operation on a file object.
 export fn read(
@@ -26,21 +26,27 @@ export fn readv(
 	file.op = op::READV;
 	file.cb = cb;
 	file.vec = vec;
-	filemod(file, rt::EPOLLOUT);
+	filemod(file, rt::EPOLLIN | rt::EPOLLHUP);
 	return req { ... };
 };
 
 fn readv_finish(file: *file, ev: *rt::epoll_event) void = {
-	assert(file.op == op::READV && ev.events & rt::EPOLLIN != 0);
+	assert(file.op == op::READV);
+	assert(ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0);
 	assert(file.cb != null);
-	const r = io::readv(file.fd, file.vec...);
 	const cb = file.cb: *readcb;
-	cb(file, r);
 	file.op = op::NONE;
+
+	if (ev.events & rt::EPOLLHUP != 0) {
+		cb(file, io::EOF);
+	} else {
+		const r = io::readv(file.fd, file.vec...);
+		cb(file, r);
+	};
 };
 
 // A callback for a [[write]] or [[writev]] operation.
-export type writecb = *fn(file: *file, result: (size | io::error)) void;
+export type writecb = fn(file: *file, result: (size | io::error)) void;
 
 // Schedules a write operation on a file object.
 export fn write(
@@ -66,7 +72,7 @@ export fn writev(
 	file.op = op::WRITEV;
 	file.cb = cb;
 	file.vec = vec;
-	filemod(file, rt::EPOLLOUT);
+	filemod(file, rt::EPOLLOUT | rt::EPOLLHUP);
 	return req { ... };
 };
 
@@ -75,6 +81,6 @@ fn writev_finish(file: *file, ev: *rt::epoll_event) void = {
 	assert(file.cb != null);
 	const r = io::writev(file.fd, file.vec...);
 	const cb = file.cb: *writecb;
-	cb(file, r);
 	file.op = op::NONE;
+	cb(file, r);
 };

@@ -51,12 +51,25 @@ export fn register(
 
 // Unregisters a file object with an event loop and frees resources associated
 // with it. Does not close the underlying file descriptor.
-export fn unregister(loop: *loop, file: *file) void = {
+export fn unregister(file: *file) void = {
+	const loop = file.ev;
 	// The only way that this could fail is in the event of a use-after-free
 	// or if the user fucks around and constructs a custom [[file]] which
 	// was never registered, so assert on error.
 	rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
 	free(file);
+};
+
+// Returns the file descriptor for a given file. Note that ev assumes that it
+// will be responsible for all I/O on the file and any user modifications may
+// cause the event loop to enter an invalid state.
+export fn file_getfd(file: *file) io::file = {
+	return file.fd;
+};
+
+// Returns the event loop for a given file.
+export fn file_getloop(file: *file) *loop = {
+	return file.ev;
 };
 
 // Modifies the epoll events for a given file. For internal use.
