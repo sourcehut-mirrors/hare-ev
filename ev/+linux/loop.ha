@@ -92,6 +92,8 @@ export fn dispatch(
 			readv_ready(file, ev);
 		case op::WRITEV =>
 			writev_ready(file, ev);
+		case op::ACCEPT =>
+			accept_ready(file, ev);
 		};
 	};
 

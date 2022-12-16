@@ -1,11 +1,13 @@
 use errors;
 use io;
+use net;
 use rt;
 
 export type op = enum {
 	NONE,
 	READV,
 	WRITEV,
+	ACCEPT,
 };
 
 export type fflags = enum uint {
@@ -27,6 +29,7 @@ export type file = struct {
 			vbuf: rt::iovec,
 			vec: []rt::iovec,
 		},
+		sockflags: net::sockflags,
 	},
 };
 
@@ -74,6 +77,21 @@ export fn unregister(file: *file) void = {
 		// error.
 		rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
 	};
+	free(file);
+};
+
+// Unregisters a file object with an event loop, frees resources associated with
+// it, and closes the underlying file descriptor.
+export fn close(file: *file) void = {
+	const loop = file.ev;
+	if (file.flags & fflags::BLOCKING == 0) {
+		// The only way that this could fail is in the event of a
+		// use-after-free or if the user fucks around and constructs a
+		// custom [[file]] which was never registered, so assert on
+		// error.
+		rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
+	};
+	io::close(file.fd)!;
 	free(file);
 };
 
