@@ -10,6 +10,7 @@ type server = struct {
 	loop: *ev::loop,
 	sock: *ev::file,
 	clients: []*client,
+	exit: int,
 };
 
 type client = struct {
@@ -38,6 +39,7 @@ export fn main() void = {
 
 	log::println("Listening on 127.0.0.1:12345");
 	for (ev::dispatch(&loop, -1)!) void;
+	os::exit(state.exit);
 };
 
 fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
@@ -48,6 +50,7 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 	case let err: net::error =>
 		log::printfln("error: accept: {}", net::strerror(err));
 		ev::stop(server.loop);
+		server.exit = 1;
 		return;
 	};
 	const file = ev::getfd(sock);
