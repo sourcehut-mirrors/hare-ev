@@ -2,6 +2,7 @@ use errors;
 use net;
 use net::ip;
 use net::tcp;
+use net::udp;
 use rt;
 
 // Creates a socket which listens for incoming TCP connections on the given
@@ -13,6 +14,18 @@ export fn listen_tcp(
 	opts: tcp::listen_option...
 ) (*file | net::error | errors::error) = {
 	const sock = tcp::listen(addr, port, opts...)?;
+	return register(loop, sock)?;
+};
+
+// Creates a socket which listens for incoming UDP packets on the given IP
+// address and port.
+export fn listen_udp(
+	loop: *loop,
+	addr: ip::addr,
+	port: u16,
+	opts: udp::listen_option...
+) (*file | net::error | errors::error) = {
+	const sock = udp::listen(addr, port, opts...)?;
 	return register(loop, sock)?;
 };
 
@@ -61,15 +74,28 @@ export fn connect_tcp(
 	let file = register(loop, sock)?;
 	file.user = user;
 	file.cb = cb;
-	file.op = op::CONNECT;
+	file.op = op::CONNECT_TCP;
 	file_epoll_ctl(file);
 };
 
-fn connect_ready(
+// Creates a UDP socket on this event loop and sets the default destination to
+// the given address.
+export fn connect_udp(
+	loop: *loop,
+	dest: ip::addr,
+	port: u16,
+	opts: udp::connect_option...
+) (*file | net::error | errors::error) = {
+	const sock = udp::connect(dest, port, opts...)?;
+	const file = register(loop, sock)?;
+	return file;
+};
+
+fn connect_tcp_ready(
 	sock: *file,
 	ev: *rt::epoll_event,
 ) void = {
-	assert(sock.op == op::CONNECT);
+	assert(sock.op == op::CONNECT_TCP);
 	assert(ev.events & rt::EPOLLOUT != 0);
 	assert(sock.cb != null);
 	const cb = sock.cb: *connectcb;
@@ -131,4 +157,86 @@ fn accept_ready(
 	case let err: net::error =>
 		cb(sock, err);
 	};
+};
+
+// TODO: Support recv & send in parallel
+
+// Callback for a [[recvfrom]] operation. The second parameter is either an
+// error or a tuple of the number of bytes received and the IP address and port
+// of the sender.
+export type recvfromcb = fn(
+	file: *file,
+	r: ((size, ip::addr, u16) | net::error),
+) void;
+
+// Schedules a receive operation on a socket.
+export fn recvfrom(
+	sock: *file,
+	cb: *recvfromcb,
+	buf: []u8,
+) req = {
+	assert(sock.op == op::NONE);
+	sock.op = op::RECVFROM;
+	sock.cb = cb;
+	sock.sendrecv.rbuf = buf;
+	file_epoll_ctl(sock);
+	return req { ... };
+};
+
+fn recvfrom_ready(
+	sock: *file,
+	ev: *rt::epoll_event,
+) void = {
+	assert(sock.op == op::RECVFROM);
+	assert(sock.cb != null);
+	const cb = sock.cb: *recvfromcb;
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
+
+	let src: ip::addr = ip::ANY_V4, port = 0u16;
+	match (udp::recvfrom(sock.fd, sock.sendrecv.rbuf, &src, &port)) {
+	case let err: net::error =>
+		cb(sock, err);
+	case let n: size =>
+		cb(sock, (n, src, port));
+	};
+};
+
+export type sendtocb = fn(file: *file, r: (size | net::error)) void;
+
+// Schedules a send operation on a socket.
+export fn sendto(
+	sock: *file,
+	cb: *sendtocb,
+	buf: []u8,
+	dest: ip::addr,
+	port: u16,
+) req = {
+	assert(sock.op == op::NONE);
+	sock.op = op::SENDTO;
+	sock.cb = cb;
+	sock.sendrecv.sbuf = buf;
+	sock.sendrecv.dest = dest;
+	sock.sendrecv.port = port;
+	file_epoll_ctl(sock);
+	return req { ... };
+};
+
+fn sendto_ready(
+	sock: *file,
+	ev: *rt::epoll_event,
+) void = {
+	assert(sock.op == op::SENDTO);
+	assert(sock.cb != null);
+	const cb = sock.cb: *sendtocb;
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
+
+	const r = udp::sendto(
+		sock.fd,
+		sock.sendrecv.sbuf,
+		sock.sendrecv.dest,
+		sock.sendrecv.port,
+	);
+	cb(sock, r);
 };

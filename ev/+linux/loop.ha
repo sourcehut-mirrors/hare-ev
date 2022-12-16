@@ -104,12 +104,16 @@ export fn dispatch(
 			writable_ready(file, ev);
 		case op::ACCEPT =>
 			accept_ready(file, ev);
-		case op::CONNECT =>
-			connect_ready(file, ev);
+		case op::CONNECT_TCP =>
+			connect_tcp_ready(file, ev);
 		case op::SIGNAL =>
 			signal_ready(file, ev);
 		case op::TIMER =>
 			timer_ready(file, ev);
+		case op::RECVFROM =>
+			recvfrom_ready(file, ev);
+		case op::SENDTO =>
+			sendto_ready(file, ev);
 		case =>
 			assert(pending & ~(op::READV | op::WRITEV) == 0);
 		};

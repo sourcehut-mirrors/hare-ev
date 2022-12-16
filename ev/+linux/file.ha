@@ -1,6 +1,7 @@
 use errors;
 use io;
 use net;
+use net::ip;
 use rt;
 use unix::signal;
 
@@ -9,12 +10,15 @@ export type op = enum u64 {
 	READV    = 1 << 0,
 	WRITEV   = 1 << 1,
 
-	READABLE = 1 << 16,
-	WRITABLE = 2 << 16,
-	ACCEPT   = 3 << 16,
-	CONNECT  = 4 << 16,
-	SIGNAL   = 5 << 16,
-	TIMER    = 6 << 16,
+	READABLE    = 1 << 16,
+	WRITABLE    = 2 << 16,
+	ACCEPT      = 3 << 16,
+	CONNECT_TCP = 4 << 16,
+	CONNECT_UDP = 5 << 16,
+	SIGNAL      = 6 << 16,
+	TIMER       = 7 << 16,
+	RECVFROM    = 8 << 16,
+	SENDTO      = 9 << 16,
 };
 
 export type fflags = enum uint {
@@ -41,6 +45,12 @@ export type file = struct {
 		},
 		sockflags: net::sockflags,
 		sigmask: signal::sigset,
+		sendrecv: struct {
+			sbuf: []u8,
+			rbuf: []u8,
+			dest: ip::addr,
+			port: u16,
+		},
 	},
 };
 
@@ -137,13 +147,17 @@ fn file_epoll_ctl(file: *file) void = {
 	switch (file.op) {
 	case op::ACCEPT =>
 		events |= rt::EPOLLIN;
-	case op::CONNECT =>
+	case op::CONNECT_TCP =>
 		events |= rt::EPOLLOUT;
 	case op::SIGNAL =>
 		events |= rt::EPOLLIN;
 	case op::TIMER =>
 		events &= ~rt::EPOLLONESHOT;
 		events |= rt::EPOLLIN;
+	case op::RECVFROM =>
+		events |= rt::EPOLLIN;
+	case op::SENDTO =>
+		events |= rt::EPOLLOUT;
 	case =>
 		yield;
 	};
