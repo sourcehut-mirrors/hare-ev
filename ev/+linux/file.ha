@@ -85,10 +85,6 @@ export fn unregister(file: *file) void = {
 export fn close(file: *file) void = {
 	const loop = file.ev;
 	if (file.flags & fflags::BLOCKING == 0) {
-		// The only way that this could fail is in the event of a
-		// use-after-free or if the user fucks around and constructs a
-		// custom [[file]] which was never registered, so assert on
-		// error.
 		rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
 	};
 	io::close(file.fd)!;
