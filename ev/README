@@ -1,0 +1,15 @@
+ev provides an event loop for asynchronous I/O.
+
+Start with [[newloop]] to create an event loop, then register files with it
+using [[register]], or convenience functions like [[listen_tcp]]. Async
+operations are provided such as [[read]], [[write]], and [[accept]]; each of
+these schedules an I/O operation to be performed once the operating system is
+ready to accept it without blocking. Users provide a callback to scheduling
+functions which is called with the result of the I/O operation once completed.
+
+Call [[ev::dispatch]] to process events for your event loop. This function will
+return true until you call [[ev::stop]], providing a convenient means of exiting
+the event loop from within callbacks. Thus, your core event loop might look like
+this:
+
+	for (ev::dispatch(&loop, -1)) void;
