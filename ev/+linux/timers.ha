@@ -35,6 +35,7 @@ export fn timer_configure(
 	delay: time::duration,
 	repeat: time::duration,
 ) void = {
+	assert(timer.op == op::TIMER);
 	let spec = rt::itimerspec { ... };
 	time::duration_to_timespec(delay, &spec.it_value);
 	time::duration_to_timespec(repeat, &spec.it_interval);
