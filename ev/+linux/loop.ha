@@ -108,8 +108,10 @@ export fn dispatch(
 			connect_ready(file, ev);
 		case op::SIGNAL =>
 			signal_ready(file, ev);
+		case op::TIMER =>
+			timer_ready(file, ev);
 		case =>
-			yield;
+			assert(pending & ~(op::READV | op::WRITEV) == 0);
 		};
 	};
 

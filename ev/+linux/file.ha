@@ -14,6 +14,7 @@ export type op = enum u64 {
 	ACCEPT   = 3 << 16,
 	CONNECT  = 4 << 16,
 	SIGNAL   = 5 << 16,
+	TIMER    = 6 << 16,
 };
 
 export type fflags = enum uint {
@@ -140,6 +141,10 @@ fn file_epoll_ctl(file: *file) void = {
 		events |= rt::EPOLLOUT;
 	};
 	if (file.op & op::SIGNAL != 0) {
+		events |= rt::EPOLLIN;
+	};
+	if (file.op & op::TIMER != 0) {
+		events &= ~rt::EPOLLONESHOT;
 		events |= rt::EPOLLIN;
 	};
 
