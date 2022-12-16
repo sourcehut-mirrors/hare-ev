@@ -134,18 +134,18 @@ fn file_epoll_ctl(file: *file) void = {
 	if (file.op & op::WRITEV != 0 || file.op & op::WRITABLE != 0) {
 		events |= rt::EPOLLOUT | rt::EPOLLHUP;
 	};
-	if (file.op & op::ACCEPT != 0) {
+	switch (file.op) {
+	case op::ACCEPT =>
 		events |= rt::EPOLLIN;
-	};
-	if (file.op & op::CONNECT != 0) {
+	case op::CONNECT =>
 		events |= rt::EPOLLOUT;
-	};
-	if (file.op & op::SIGNAL != 0) {
+	case op::SIGNAL =>
 		events |= rt::EPOLLIN;
-	};
-	if (file.op & op::TIMER != 0) {
+	case op::TIMER =>
 		events &= ~rt::EPOLLONESHOT;
 		events |= rt::EPOLLIN;
+	case =>
+		yield;
 	};
 
 	let ev = rt::epoll_event {
