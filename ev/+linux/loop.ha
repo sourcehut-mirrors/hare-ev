@@ -85,22 +85,28 @@ export fn dispatch(
 		if (ev.events == 0) {
 			continue;
 		};
-		if (file.op == op::NONE) {
-			abort("Invalid pending operation");
-		};
+		const pending = file.op;
 		if (ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0
-				&& file.op & op::READV != 0) {
+				&& pending & op::READV != 0) {
 			readv_ready(file, ev);
 		};
 		if (ev.events & (rt::EPOLLOUT | rt::EPOLLHUP) != 0
-				&& file.op & op::WRITEV != 0) {
+				&& pending & op::WRITEV != 0) {
 			writev_ready(file, ev);
 		};
-		if (file.op & op::ACCEPT != 0) {
+		switch (pending) {
+		case op::NONE =>
+			abort("No operation pending for ready object");
+		case op::READABLE =>
+			readable_ready(file, ev);
+		case op::WRITABLE =>
+			writable_ready(file, ev);
+		case op::ACCEPT =>
 			accept_ready(file, ev);
-		};
-		if (file.op & op::CONNECT != 0) {
+		case op::CONNECT =>
 			connect_ready(file, ev);
+		case =>
+			yield;
 		};
 	};
 

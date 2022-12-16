@@ -4,11 +4,14 @@ use net;
 use rt;
 
 export type op = enum u64 {
-	NONE    = 0,
-	READV   = 1 << 0,
-	WRITEV  = 1 << 1,
-	ACCEPT  = 1 << 2,
-	CONNECT = 1 << 3,
+	NONE     = 0,
+	READV    = 1 << 0,
+	WRITEV   = 1 << 1,
+
+	READABLE = 1 << 16,
+	WRITABLE = 2 << 16,
+	ACCEPT   = 3 << 16,
+	CONNECT  = 4 << 16,
 };
 
 export type fflags = enum uint {
@@ -118,10 +121,10 @@ export fn getloop(file: *file) *loop = {
 // Updates epoll events for a given file. For internal use.
 fn file_epoll_ctl(file: *file) void = {
 	let events = rt::EPOLLONESHOT;
-	if (file.op & op::READV != 0) {
+	if (file.op & op::READV != 0 || file.op & op::READABLE != 0) {
 		events |= rt::EPOLLIN | rt::EPOLLHUP;
 	};
-	if (file.op & op::WRITEV != 0) {
+	if (file.op & op::WRITEV != 0 || file.op & op::WRITABLE != 0) {
 		events |= rt::EPOLLOUT | rt::EPOLLHUP;
 	};
 	if (file.op & op::ACCEPT != 0) {

@@ -72,8 +72,6 @@ export fn writev(
 	cb: *writecb,
 	vec: io::vector...
 ) req = {
-	// XXX: Should we support both pending reads and writes at the same
-	// time? (yes)
 	assert(file.op & op::WRITEV == 0);
 	if (file.flags & fflags::BLOCKING != 0) {
 		const r = io::writev(file.fd, vec...);
