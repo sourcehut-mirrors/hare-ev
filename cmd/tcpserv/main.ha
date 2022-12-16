@@ -34,13 +34,13 @@ export fn main() void = {
 		...
 	};
 	ev::setuser(sock, &state);
-	ev::accept(sock, &sock_accept);
+	ev::accept(sock, &server_accept);
 
 	log::println("Listening on 127.0.0.1:12345");
 	for (ev::dispatch(&loop, -1)!) void;
 };
 
-fn sock_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
+fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 	let server = ev::getuser(sock): *server;
 	const sock = match (r) {
 	case let sock: *ev::file =>
@@ -64,7 +64,7 @@ fn sock_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 	append(server.clients, client);
 	ev::setuser(client.sock, client);
 	ev::read(client.sock, &client_read, client.buf);
-	ev::accept(server.sock, &sock_accept);
+	ev::accept(server.sock, &server_accept);
 };
 
 fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
