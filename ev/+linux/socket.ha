@@ -32,6 +32,9 @@ export type connectcb = fn(result: (*file | net::error), user: nullable *void) v
 // 		let user = user: *state;
 // 	};
 //
+// The user data object provided will be assigned to the [[file]] which is
+// provided to the callback after the connection is established.
+//
 // If you don't need a user data object you can just omit it:
 //
 // 	ev::connect_tcp(&loop, &connected, addr, port, &user);
