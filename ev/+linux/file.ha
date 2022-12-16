@@ -14,13 +14,12 @@ export type op = enum u64 {
 	WRITABLE    = 2 << 16,
 	ACCEPT      = 3 << 16,
 	CONNECT_TCP = 4 << 16,
-	CONNECT_UDP = 5 << 16,
-	SIGNAL      = 6 << 16,
-	TIMER       = 7 << 16,
-	SENDTO      = 8 << 16,
-	RECVFROM    = 9 << 16,
-	SEND        = 10 << 16,
-	RECV        = 11 << 16,
+	SIGNAL      = 5 << 16,
+	TIMER       = 6 << 16,
+	SENDTO      = 7 << 16,
+	RECVFROM    = 8 << 16,
+	SEND        = 9 << 16,
+	RECV        = 10 << 16,
 };
 
 export type fflags = enum uint {
