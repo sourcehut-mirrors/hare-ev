@@ -6,3 +6,7 @@ candidate for being merged into the Hare standard library.
 ## Installation
 
 TBD
+
+## Examples
+
+See cmd/*
