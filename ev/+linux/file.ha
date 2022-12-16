@@ -2,6 +2,7 @@ use errors;
 use io;
 use net;
 use rt;
+use unix::signal;
 
 export type op = enum u64 {
 	NONE     = 0,
@@ -12,6 +13,7 @@ export type op = enum u64 {
 	WRITABLE = 2 << 16,
 	ACCEPT   = 3 << 16,
 	CONNECT  = 4 << 16,
+	SIGNAL   = 5 << 16,
 };
 
 export type fflags = enum uint {
@@ -37,6 +39,7 @@ export type file = struct {
 			wvec: []rt::iovec,
 		},
 		sockflags: net::sockflags,
+		sigmask: signal::sigset,
 	},
 };
 
@@ -83,6 +86,9 @@ export fn unregister(file: *file) void = {
 		// custom [[file]] which was never registered, so assert on
 		// error.
 		rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
+	};
+	if (file.op == op::SIGNAL) {
+		signal_restore(file);
 	};
 	free(file);
 };
@@ -132,6 +138,9 @@ fn file_epoll_ctl(file: *file) void = {
 	};
 	if (file.op & op::CONNECT != 0) {
 		events |= rt::EPOLLOUT;
+	};
+	if (file.op & op::SIGNAL != 0) {
+		events |= rt::EPOLLIN;
 	};
 
 	let ev = rt::epoll_event {

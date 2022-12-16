@@ -3,6 +3,7 @@ use io;
 use rt;
 use time;
 use types;
+use unix::signal;
 
 export type loop = struct {
 	fd: io::file,
@@ -105,6 +106,8 @@ export fn dispatch(
 			accept_ready(file, ev);
 		case op::CONNECT =>
 			connect_ready(file, ev);
+		case op::SIGNAL =>
+			signal_ready(file, ev);
 		case =>
 			yield;
 		};

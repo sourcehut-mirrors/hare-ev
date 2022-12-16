@@ -6,6 +6,7 @@ use net;
 use net::ip;
 use net::tcp;
 use os;
+use unix::signal;
 
 type server = struct {
 	loop: *ev::loop,
@@ -45,9 +46,19 @@ export fn main() void = {
 	ev::setuser(sock, &state);
 	ev::accept(sock, &server_accept);
 
+	const sig = ev::signal(&loop, &signal, signal::SIGINT, signal::SIGTERM)!;
+	defer ev::close(sig);
+	ev::setuser(sig, &state);
+
 	log::println("Listening on 127.0.0.1:12345");
 	for (ev::dispatch(&loop, -1)!) void;
 	os::exit(state.exit);
+};
+
+fn signal(file: *ev::file, sig: signal::signal) void = {
+	log::printfln("Exiting due to signal {}", sig: int);
+	const server = ev::getuser(file): *server;
+	ev::stop(server.loop);
 };
 
 fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
