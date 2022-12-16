@@ -83,12 +83,9 @@ export fn unregister(file: *file) void = {
 // Unregisters a file object with an event loop, frees resources associated with
 // it, and closes the underlying file descriptor.
 export fn close(file: *file) void = {
-	const loop = file.ev;
-	if (file.flags & fflags::BLOCKING == 0) {
-		rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
-	};
-	io::close(file.fd)!;
-	free(file);
+	const fd = file.fd;
+	unregister(file);
+	io::close(fd)!;
 };
 
 // Sets the user data field on this file object to the provided object.
