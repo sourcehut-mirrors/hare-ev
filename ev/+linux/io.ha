@@ -42,6 +42,7 @@ fn readv_ready(file: *file, ev: *rt::epoll_event) void = {
 	assert(file.cb != null);
 	const cb = file.cb: *readcb;
 	file.op = op::NONE;
+	filemod(file, 0);
 
 	if (ev.events & rt::EPOLLHUP != 0) {
 		cb(file, io::EOF);
@@ -94,5 +95,6 @@ fn writev_ready(file: *file, ev: *rt::epoll_event) void = {
 	const r = io::writev(file.fd, file.vec...);
 	const cb = file.cb: *writecb;
 	file.op = op::NONE;
+	filemod(file, 0);
 	cb(file, r);
 };

@@ -46,6 +46,7 @@ fn accept_ready(
 	assert(sock.cb != null);
 	const cb = sock.cb: *acceptcb;
 	sock.op = op::NONE;
+	filemod(sock, 0);
 
 	const r = tcp::accept(sock.fd, sock.sockflags);
 	match (r) {
