@@ -8,6 +8,7 @@ export type op = enum {
 	READV,
 	WRITEV,
 	ACCEPT,
+	CONNECT,
 };
 
 export type fflags = enum uint {

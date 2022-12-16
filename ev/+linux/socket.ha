@@ -16,6 +16,77 @@ export fn listen_tcp(
 	return register(loop, sock)?;
 };
 
+export type connectcb = fn(result: (*file | net::error), user: nullable *void) void;
+
+// Creates a socket and connects to a given IP address and port over TCP.
+//
+// The variadic arguments accept [[net::sockflags]] and/or no more than one user
+// data pointer. If the user data pointer is provided, it will be passed to the
+// callback. This allows the user to pass a state object through the connection
+// process:
+//
+//	let user: state = // ...
+// 	ev::connect_tcp(&loop, &connected, addr, port, &user);
+//
+// 	fn connected(result: (*ev::file | net::error), user: nullable *void) void = {
+// 		let user = user: *state;
+// 	};
+//
+// If you don't need a user data object you can just omit it:
+//
+// 	ev::connect_tcp(&loop, &connected, addr, port, &user);
+export fn connect_tcp(
+	loop: *loop,
+	cb: *connectcb,
+	addr: ip::addr,
+	port: u16,
+	opts: (net::sockflags | *void)...
+) (void | net::error | errors::error) = {
+	// XXX: This doesn't let us set keepalive
+	let opt: net::sockflags = 0;
+	let user: nullable *void = null;
+	for (let i = 0z; i < len(opts); i += 1) {
+		match (opts[i]) {
+		case let o: net::sockflags =>
+			opt |= o;
+		case let u: *void =>
+			assert(user == null);
+			user = u;
+		};
+	};
+	const sock = tcp::connect(addr, port, opt | net::sockflags::NONBLOCK)?;
+	let file = register(loop, sock)?;
+	file.user = user;
+	file.cb = cb;
+	file.op = op::CONNECT;
+	filemod(file, rt::EPOLLOUT);
+};
+
+fn connect_ready(
+	sock: *file,
+	ev: *rt::epoll_event,
+) void = {
+	assert(sock.op == op::CONNECT);
+	assert(ev.events & rt::EPOLLOUT != 0);
+	assert(sock.cb != null);
+	const cb = sock.cb: *connectcb;
+	sock.op = op::NONE;
+	filemod(sock, 0);
+
+	let errno = 0i, optsz = size(int): u32;
+	rt::getsockopt(sock.fd, rt::SOL_SOCKET, rt::SO_ERROR, &errno, &optsz)!;
+	if (errno != 0) {
+		cb(errors::errno(errno), sock.user);
+		close(sock);
+	} else {
+		// XXX: If the user puts NONBLOCK into the opts provided at
+		// [[connect_tcp]] we could try to preserve that here
+		const fl = rt::fcntl(sock.fd, rt::F_GETFL, void)!;
+		rt::fcntl(sock.fd, rt::F_SETFL, fl & ~rt::O_NONBLOCK)!;
+		cb(sock, sock.user);
+	};
+};
+
 // A callback for an [[accept]] operation.
 export type acceptcb = fn(file: *file, result: (*file | net::error)) void;
 

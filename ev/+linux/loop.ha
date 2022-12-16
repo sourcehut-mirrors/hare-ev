@@ -94,6 +94,8 @@ export fn dispatch(
 			writev_ready(file, ev);
 		case op::ACCEPT =>
 			accept_ready(file, ev);
+		case op::CONNECT =>
+			connect_ready(file, ev);
 		};
 	};
 
