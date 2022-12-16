@@ -15,6 +15,8 @@ type server = struct {
 type client = struct {
 	server: *server,
 	sock: *ev::file,
+	addr: ip::addr,
+	port: u16,
 	buf: [os::BUFSIZ]u8,
 	wbuf: []u8,
 };
@@ -55,6 +57,8 @@ fn sock_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 	const client = alloc(client {
 		server = server,
 		sock = sock,
+		addr = addr,
+		port = port,
 		...
 	});
 	append(server.clients, client);
@@ -67,7 +71,9 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 	const client = ev::getuser(sock): *client;
 	const n = match (r) {
 	case let err: io::error =>
-		log::printfln("error: read: {}", io::strerror(err));
+		log::printfln("{}:{}: error: read: {}",
+			ip::string(client.addr), client.port,
+			io::strerror(err));
 		client_close(client);
 		return;
 	case io::EOF =>
@@ -84,7 +90,9 @@ fn client_write(sock: *ev::file, r: (size | io::error)) void = {
 	const client = ev::getuser(sock): *client;
 	const n = match (r) {
 	case let err: io::error =>
-		log::printfln("error: write: {}", io::strerror(err));
+		log::printfln("{}:{}: error: write: {}",
+			ip::string(client.addr), client.port,
+			io::strerror(err));
 		client_close(client);
 		return;
 	case let n: size =>
@@ -106,6 +114,8 @@ fn client_close(client: *client) void = {
 			break;
 		};
 	};
+	log::printfln("{}:{}: Connection closed",
+		ip::string(client.addr), client.port);
 	ev::close(client.sock);
 	free(client);
 };
