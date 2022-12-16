@@ -56,7 +56,7 @@ export fn main() void = {
 };
 
 fn signal(file: *ev::file, sig: signal::signal) void = {
-	log::printfln("Exiting due to signal {}", sig: int);
+	log::printfln("Exiting due to {}", signal::signame(sig));
 	const server = ev::getuser(file): *server;
 	ev::stop(server.loop);
 };
