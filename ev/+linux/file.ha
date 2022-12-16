@@ -3,12 +3,12 @@ use io;
 use net;
 use rt;
 
-export type op = enum {
-	NONE,
-	READV,
-	WRITEV,
-	ACCEPT,
-	CONNECT,
+export type op = enum u64 {
+	NONE    = 0,
+	READV   = 1 << 0,
+	WRITEV  = 1 << 1,
+	ACCEPT  = 1 << 2,
+	CONNECT = 1 << 3,
 };
 
 export type fflags = enum uint {
@@ -22,13 +22,16 @@ export type file = struct {
 	flags: fflags,
 	op: op,
 	cb: nullable *void,
+	cb2: nullable *void,
 	user: nullable *void,
 
 	// Operation-specific data
 	union {
 		struct {
-			vbuf: rt::iovec,
-			vec: []rt::iovec,
+			rvbuf: rt::iovec,
+			rvec: []rt::iovec,
+			wvbuf: rt::iovec,
+			wvec: []rt::iovec,
 		},
 		sockflags: net::sockflags,
 	},
@@ -112,10 +115,24 @@ export fn getloop(file: *file) *loop = {
 	return file.ev;
 };
 
-// Modifies the epoll events for a given file. For internal use.
-fn filemod(file: *file, events: u32) void = {
+// Updates epoll events for a given file. For internal use.
+fn file_epoll_ctl(file: *file) void = {
+	let events = rt::EPOLLONESHOT;
+	if (file.op & op::READV != 0) {
+		events |= rt::EPOLLIN | rt::EPOLLHUP;
+	};
+	if (file.op & op::WRITEV != 0) {
+		events |= rt::EPOLLOUT | rt::EPOLLHUP;
+	};
+	if (file.op & op::ACCEPT != 0) {
+		events |= rt::EPOLLIN;
+	};
+	if (file.op & op::CONNECT != 0) {
+		events |= rt::EPOLLOUT;
+	};
+
 	let ev = rt::epoll_event {
-		events = events | rt::EPOLLONESHOT,
+		events = events,
 		...
 	};
 	ev.data.ptr = file;

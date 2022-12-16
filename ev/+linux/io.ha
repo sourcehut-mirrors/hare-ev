@@ -10,9 +10,9 @@ export fn read(
 	cb: *readcb,
 	buf: []u8,
 ) req = {
-	file.vbuf = io::mkvector(buf);
+	file.rvbuf = io::mkvector(buf);
 	// XXX: Bit of a hack to avoid allocating a slice
-	const vec = (&file.vbuf: *[*]io::vector)[..1];
+	const vec = (&file.rvbuf: *[*]io::vector)[..1];
 	return readv(file, cb, vec...);
 };
 
@@ -22,32 +22,31 @@ export fn readv(
 	cb: *readcb,
 	vec: io::vector...
 ) req = {
-	assert(file.op == op::NONE);
+	assert(file.op & op::READV == 0);
 	if (file.flags & fflags::BLOCKING != 0) {
 		const r = io::readv(file.fd, vec...);
 		cb(file, r);
 		return req { ... };
 	};
 
-	file.op = op::READV;
+	file.op |= op::READV;
 	file.cb = cb;
-	file.vec = vec;
-	filemod(file, rt::EPOLLIN | rt::EPOLLHUP);
+	file.rvec = vec;
+	file_epoll_ctl(file);
 	return req { ... };
 };
 
 fn readv_ready(file: *file, ev: *rt::epoll_event) void = {
-	assert(file.op == op::READV);
-	assert(ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0);
+	assert(file.op & op::READV != 0);
 	assert(file.cb != null);
 	const cb = file.cb: *readcb;
-	file.op = op::NONE;
-	filemod(file, 0);
+	file.op &= ~op::READV;
+	file_epoll_ctl(file);
 
 	if (ev.events & rt::EPOLLHUP != 0) {
 		cb(file, io::EOF);
 	} else {
-		const r = io::readv(file.fd, file.vec...);
+		const r = io::readv(file.fd, file.rvec...);
 		cb(file, r);
 	};
 };
@@ -61,9 +60,9 @@ export fn write(
 	cb: *writecb,
 	buf: []u8,
 ) req = {
-	file.vbuf = io::mkvector(buf);
+	file.wvbuf = io::mkvector(buf);
 	// XXX: Bit of a hack to avoid allocating a slice
-	const vec = (&file.vbuf: *[*]io::vector)[..1];
+	const vec = (&file.wvbuf: *[*]io::vector)[..1];
 	return writev(file, cb, vec...);
 };
 
@@ -75,26 +74,26 @@ export fn writev(
 ) req = {
 	// XXX: Should we support both pending reads and writes at the same
 	// time? (yes)
-	assert(file.op == op::NONE);
+	assert(file.op & op::WRITEV == 0);
 	if (file.flags & fflags::BLOCKING != 0) {
 		const r = io::writev(file.fd, vec...);
 		cb(file, r);
 		return req { ... };
 	};
 
-	file.op = op::WRITEV;
-	file.cb = cb;
-	file.vec = vec;
-	filemod(file, rt::EPOLLOUT | rt::EPOLLHUP);
+	file.op |= op::WRITEV;
+	file.cb2 = cb;
+	file.wvec = vec;
+	file_epoll_ctl(file);
 	return req { ... };
 };
 
 fn writev_ready(file: *file, ev: *rt::epoll_event) void = {
-	assert(file.op == op::WRITEV && ev.events & rt::EPOLLOUT != 0);
+	assert(file.op & op::WRITEV != 0);
 	assert(file.cb != null);
-	const r = io::writev(file.fd, file.vec...);
-	const cb = file.cb: *writecb;
-	file.op = op::NONE;
-	filemod(file, 0);
+	const r = io::writev(file.fd, file.wvec...);
+	const cb = file.cb2: *writecb;
+	file.op &= ~op::WRITEV;
+	file_epoll_ctl(file);
 	cb(file, r);
 };

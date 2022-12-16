@@ -59,7 +59,7 @@ export fn connect_tcp(
 	file.user = user;
 	file.cb = cb;
 	file.op = op::CONNECT;
-	filemod(file, rt::EPOLLOUT);
+	file_epoll_ctl(file);
 };
 
 fn connect_ready(
@@ -71,7 +71,7 @@ fn connect_ready(
 	assert(sock.cb != null);
 	const cb = sock.cb: *connectcb;
 	sock.op = op::NONE;
-	filemod(sock, 0);
+	file_epoll_ctl(sock);
 
 	let errno = 0i, optsz = size(int): u32;
 	rt::getsockopt(sock.fd, rt::SOL_SOCKET, rt::SO_ERROR, &errno, &optsz)!;
@@ -104,7 +104,7 @@ export fn accept(
 	sock.op = op::ACCEPT;
 	sock.cb = cb;
 	sock.sockflags = fl;
-	filemod(sock, rt::EPOLLIN);
+	file_epoll_ctl(sock);
 	return req { ... };
 };
 
@@ -117,7 +117,7 @@ fn accept_ready(
 	assert(sock.cb != null);
 	const cb = sock.cb: *acceptcb;
 	sock.op = op::NONE;
-	filemod(sock, 0);
+	file_epoll_ctl(sock);
 
 	const r = tcp::accept(sock.fd, sock.sockflags);
 	match (r) {
