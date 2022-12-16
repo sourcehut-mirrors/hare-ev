@@ -1,3 +1,4 @@
+use errors;
 use ev;
 use io;
 use log;
@@ -26,7 +27,14 @@ export fn main() void = {
 	const loop = ev::newloop()!;
 	defer ev::finish(&loop);
 
-	const sock = ev::listen_tcp(&loop, ip::LOCAL_V4, 12345)!;
+	const sock = match (ev::listen_tcp(&loop, ip::LOCAL_V4, 12345)) {
+	case let err: net::error =>
+		log::fatalf("Error: listen: {}", net::strerror(err));
+	case let err: errors::error =>
+		log::fatalf("Error: listen: {}", errors::strerror(err));
+	case let sock: *ev::file =>
+		yield sock;
+	};
 	defer ev::close(sock);
 
 	let state = server {
@@ -48,7 +56,7 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 	case let sock: *ev::file =>
 		yield sock;
 	case let err: net::error =>
-		log::printfln("error: accept: {}", net::strerror(err));
+		log::printfln("Error: accept: {}", net::strerror(err));
 		ev::stop(server.loop);
 		server.exit = 1;
 		return;
@@ -74,7 +82,7 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 	const client = ev::getuser(sock): *client;
 	const n = match (r) {
 	case let err: io::error =>
-		log::printfln("{}:{}: error: read: {}",
+		log::printfln("{}:{}: Error: read: {}",
 			ip::string(client.addr), client.port,
 			io::strerror(err));
 		client_close(client);
@@ -93,7 +101,7 @@ fn client_write(sock: *ev::file, r: (size | io::error)) void = {
 	const client = ev::getuser(sock): *client;
 	const n = match (r) {
 	case let err: io::error =>
-		log::printfln("{}:{}: error: write: {}",
+		log::printfln("{}:{}: Error: write: {}",
 			ip::string(client.addr), client.port,
 			io::strerror(err));
 		client_close(client);
