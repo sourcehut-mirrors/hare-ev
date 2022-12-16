@@ -32,7 +32,6 @@ export fn main() void = {
 		...
 	};
 	ev::setuser(sock, &state);
-
 	ev::accept(sock, &sock_accept);
 
 	log::println("Listening on 127.0.0.1:12345");
