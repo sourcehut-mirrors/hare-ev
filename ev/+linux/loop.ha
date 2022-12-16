@@ -110,10 +110,14 @@ export fn dispatch(
 			signal_ready(file, ev);
 		case op::TIMER =>
 			timer_ready(file, ev);
-		case op::RECVFROM =>
-			recvfrom_ready(file, ev);
 		case op::SENDTO =>
 			sendto_ready(file, ev);
+		case op::RECVFROM =>
+			recvfrom_ready(file, ev);
+		case op::SEND =>
+			send_ready(file, ev);
+		case op::RECV =>
+			recv_ready(file, ev);
 		case =>
 			assert(pending & ~(op::READV | op::WRITEV) == 0);
 		};

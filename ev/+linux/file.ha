@@ -17,8 +17,10 @@ export type op = enum u64 {
 	CONNECT_UDP = 5 << 16,
 	SIGNAL      = 6 << 16,
 	TIMER       = 7 << 16,
-	RECVFROM    = 8 << 16,
-	SENDTO      = 9 << 16,
+	SENDTO      = 8 << 16,
+	RECVFROM    = 9 << 16,
+	SEND        = 10 << 16,
+	RECV        = 11 << 16,
 };
 
 export type fflags = enum uint {
@@ -138,10 +140,10 @@ export fn getloop(file: *file) *loop = {
 // Updates epoll events for a given file. For internal use.
 fn file_epoll_ctl(file: *file) void = {
 	let events = rt::EPOLLONESHOT;
-	if (file.op & op::READV != 0 || file.op & op::READABLE != 0) {
+	if (file.op & op::READV != 0 || file.op == op::READABLE) {
 		events |= rt::EPOLLIN | rt::EPOLLHUP;
 	};
-	if (file.op & op::WRITEV != 0 || file.op & op::WRITABLE != 0) {
+	if (file.op & op::WRITEV != 0 || file.op == op::WRITABLE) {
 		events |= rt::EPOLLOUT | rt::EPOLLHUP;
 	};
 	switch (file.op) {
@@ -154,10 +156,10 @@ fn file_epoll_ctl(file: *file) void = {
 	case op::TIMER =>
 		events &= ~rt::EPOLLONESHOT;
 		events |= rt::EPOLLIN;
-	case op::RECVFROM =>
-		events |= rt::EPOLLIN;
-	case op::SENDTO =>
+	case op::SEND, op::SENDTO =>
 		events |= rt::EPOLLOUT;
+	case op::RECV, op::RECVFROM =>
+		events |= rt::EPOLLIN;
 	case =>
 		yield;
 	};

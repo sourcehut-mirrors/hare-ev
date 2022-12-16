@@ -29,6 +29,19 @@ export fn listen_udp(
 	return register(loop, sock)?;
 };
 
+// Creates a UDP socket on this event loop and sets the default destination to
+// the given address.
+export fn connect_udp(
+	loop: *loop,
+	dest: ip::addr,
+	port: u16,
+	opts: udp::connect_option...
+) (*file | net::error | errors::error) = {
+	const sock = udp::connect(dest, port, opts...)?;
+	const file = register(loop, sock)?;
+	return file;
+};
+
 export type connectcb = fn(result: (*file | net::error), user: nullable *void) void;
 
 // Creates a socket and connects to a given IP address and port over TCP.
@@ -76,19 +89,6 @@ export fn connect_tcp(
 	file.cb = cb;
 	file.op = op::CONNECT_TCP;
 	file_epoll_ctl(file);
-};
-
-// Creates a UDP socket on this event loop and sets the default destination to
-// the given address.
-export fn connect_udp(
-	loop: *loop,
-	dest: ip::addr,
-	port: u16,
-	opts: udp::connect_option...
-) (*file | net::error | errors::error) = {
-	const sock = udp::connect(dest, port, opts...)?;
-	const file = register(loop, sock)?;
-	return file;
 };
 
 fn connect_tcp_ready(
@@ -202,7 +202,67 @@ fn recvfrom_ready(
 	};
 };
 
+// Callback for a [[recv]] operation.
+export type recvcb = fn(file: *file, r: (size | net::error)) void;
+
+// Schedules a receive operation on a (connected) socket.
+export fn recv(
+	sock: *file,
+	cb: *recvcb,
+	buf: []u8,
+) req = {
+	assert(sock.op == op::NONE);
+	sock.op = op::RECV;
+	sock.cb = cb;
+	sock.sendrecv.rbuf = buf;
+	file_epoll_ctl(sock);
+	return req { ... };
+};
+
+fn recv_ready(
+	sock: *file,
+	ev: *rt::epoll_event,
+) void = {
+	assert(sock.op == op::RECV);
+	assert(sock.cb != null);
+	const cb = sock.cb: *recvcb;
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
+
+	const r = udp::recv(sock.fd, sock.sendrecv.rbuf);
+	cb(sock, r);
+};
+
+// Callback for a [[send]] or [[sendto]] operation.
 export type sendtocb = fn(file: *file, r: (size | net::error)) void;
+
+// Schedules a send operation on a (connected) socket.
+export fn send(
+	sock: *file,
+	cb: *sendtocb,
+	buf: []u8,
+) req = {
+	assert(sock.op == op::NONE);
+	sock.op = op::SEND;
+	sock.cb = cb;
+	sock.sendrecv.sbuf = buf;
+	file_epoll_ctl(sock);
+	return req { ... };
+};
+
+fn send_ready(
+	sock: *file,
+	ev: *rt::epoll_event,
+) void = {
+	assert(sock.op == op::SEND);
+	assert(sock.cb != null);
+	const cb = sock.cb: *sendtocb;
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
+
+	const r = udp::send(sock.fd, sock.sendrecv.sbuf);
+	cb(sock, r);
+};
 
 // Schedules a send operation on a socket.
 export fn sendto(
