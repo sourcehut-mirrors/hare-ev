@@ -82,7 +82,7 @@ export fn dispatch(
 
 	for (let i = 0; i < nevent; i += 1) {
 		// XXX: https://todo.sr.ht/~sircmpwn/hare/783
-		const ev = &(&loop.events[i]: *[*]u8)[12 * i]: *rt::epoll_event;
+		const ev = &(&loop.events[0]: *[*]u8)[12 * i]: *rt::epoll_event;
 		const file = ev.data.ptr: *file;
 		if (ev.events == 0) {
 			continue;
