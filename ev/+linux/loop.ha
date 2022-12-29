@@ -76,9 +76,20 @@ export fn dispatch(
 	// TODO: Deal with signals
 	const maxev = len(loop.events);
 	assert(maxev <= types::INT_MAX: size, "ev::dispatch: too many events");
-	const nevent = rt::epoll_pwait(
+	const nevent = match(rt::epoll_pwait(
 		loop.fd, &loop.events[0],
-		maxev: int, millis, null)!;
+		maxev: int, millis, null)) {
+	case let nevent: int =>
+		yield nevent;
+	case let err: rt::errno =>
+		switch (err) {
+		case rt::EINTR =>
+			// We shallow system suspension error code
+			return true;
+		case =>
+			abort("ev::dispatch: epoll_pwait failure");
+		};
+	};
 
 	for (let i = 0; i < nevent; i += 1) {
 		const ev = &loop.events[i];
