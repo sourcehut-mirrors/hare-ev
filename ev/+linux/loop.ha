@@ -81,8 +81,7 @@ export fn dispatch(
 		maxev: int, millis, null)!;
 
 	for (let i = 0; i < nevent; i += 1) {
-		// XXX: https://todo.sr.ht/~sircmpwn/hare/783
-		const ev = &(&loop.events[0]: *[*]u8)[12 * i]: *rt::epoll_event;
+		const ev = &loop.events[i];
 		const file = ev.data.ptr: *file;
 		if (ev.events == 0) {
 			continue;
