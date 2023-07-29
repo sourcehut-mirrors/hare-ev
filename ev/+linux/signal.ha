@@ -4,7 +4,7 @@ use rt;
 use unix::signal;
 
 // Callback function for [[signal]] operations.
-export type signalcb = fn(file: *file, sig: signal::signal) void;
+export type signalcb = fn(file: *file, sig: signal::sig) void;
 
 // Registers a signal handler with this event loop. The signals specified will
 // be masked so they are only raised via the provided callback. Closing this
@@ -16,7 +16,7 @@ export type signalcb = fn(file: *file, sig: signal::signal) void;
 export fn signal(
 	loop: *loop,
 	cb: *signalcb,
-	signals: signal::signal...
+	signals: signal::sig...
 ) (*file | errors::error) = {
 	const fd = signal::signalfd(signals...)?;
 	const file = register(loop, fd)?;
@@ -31,10 +31,10 @@ export fn signal(
 
 fn signal_restore(file: *file) void = {
 	assert(file.op == op::SIGNAL);
-	let buf: [rt::NSIG]signal::signal = [0...];
+	let buf: [rt::NSIG]signal::sig = [0...];
 	let signals = buf[..0];
 	for (let i = 1; i < rt::NSIG; i += 1) {
-		const sig = i: signal::signal;
+		const sig = i: signal::sig;
 		if (signal::sigset_member(&file.sigmask, sig)) {
 			static append(signals, sig);
 		};

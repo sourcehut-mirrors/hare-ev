@@ -46,7 +46,7 @@ export fn main() void = {
 	ev::setuser(sock, &state);
 	ev::accept(sock, &server_accept);
 
-	const sig = ev::signal(&loop, &signal, signal::SIGINT, signal::SIGTERM)!;
+	const sig = ev::signal(&loop, &signal, signal::sig::INT, signal::sig::TERM)!;
 	defer ev::close(sig);
 	ev::setuser(sig, &state);
 
@@ -55,7 +55,7 @@ export fn main() void = {
 	os::exit(state.exit);
 };
 
-fn signal(file: *ev::file, sig: signal::signal) void = {
+fn signal(file: *ev::file, sig: signal::sig) void = {
 	log::printfln("Exiting due to {}", signal::signame(sig));
 	const server = ev::getuser(file): *server;
 	ev::stop(server.loop);
