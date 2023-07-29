@@ -24,7 +24,12 @@ export fn newloop() (loop | errors::error) = {
 	return loop {
 		fd = fd,
 		// XXX: Should the number of events be customizable?
-		events = alloc([rt::epoll_event { ... }...], 256),
+		events = alloc([rt::epoll_event {
+			events = 0,
+			data = rt::epoll_data {
+				fd = 0,
+			}
+		}...], 256),
 		stop = false,
 	};
 };

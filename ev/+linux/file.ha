@@ -71,7 +71,9 @@ export fn register(
 
 	let ev = rt::epoll_event {
 		events = 0,
-		...
+		data = rt::epoll_data {
+			fd = 0,
+		}
 	};
 	ev.data.ptr = file;
 	match (rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_ADD, fd, &ev)) {
@@ -167,7 +169,9 @@ fn file_epoll_ctl(file: *file) void = {
 
 	let ev = rt::epoll_event {
 		events = events,
-		...
+		data = rt::epoll_data {
+			fd = 0,
+		},
 	};
 	ev.data.ptr = file;
 	// This can only fail under conditions associated with EPOLLEXCLUSIVE,
