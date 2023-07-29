@@ -80,7 +80,7 @@ export fn register(
 	case void =>
 		yield;
 	case let err: rt::errno =>
-		if (err: int == rt::EPERM) {
+		if (err == rt::EPERM) {
 			// epoll(2) does not support regular files, use blocking
 			// I/O instead
 			file.flags = fflags::BLOCKING;
