@@ -46,7 +46,7 @@ export type connectcb = fn(result: (*file | net::error), user: nullable *void) v
 
 // Creates a socket and connects to a given IP address and port over TCP.
 //
-// The variadic arguments accept [[net::sockflags]] and/or no more than one user
+// The variadic arguments accept [[net::sockflag]] and/or no more than one user
 // data pointer. If the user data pointer is provided, it will be passed to the
 // callback. This allows the user to pass a state object through the connection
 // process:
@@ -69,21 +69,21 @@ export fn connect_tcp(
 	cb: *connectcb,
 	addr: ip::addr,
 	port: u16,
-	opts: (net::sockflags | *void)...
+	opts: (net::sockflag | *void)...
 ) (void | net::error | errors::error) = {
 	// XXX: This doesn't let us set keepalive
-	let opt: net::sockflags = 0;
+	let opt: net::sockflag = 0;
 	let user: nullable *void = null;
 	for (let i = 0z; i < len(opts); i += 1) {
 		match (opts[i]) {
-		case let o: net::sockflags =>
+		case let o: net::sockflag =>
 			opt |= o;
 		case let u: *void =>
 			assert(user == null);
 			user = u;
 		};
 	};
-	const sock = tcp::connect(addr, port, opt | net::sockflags::NONBLOCK)?;
+	const sock = tcp::connect(addr, port, opt | net::sockflag::NONBLOCK)?;
 	let file = register(loop, sock)?;
 	file.user = user;
 	file.cb = cb;
@@ -123,16 +123,16 @@ export type acceptcb = fn(file: *file, result: (*file | net::error)) void;
 export fn accept(
 	sock: *file,
 	cb: *acceptcb,
-	flags: net::sockflags...
+	flags: net::sockflag...
 ) req = {
 	assert(sock.op == op::NONE);
-	let fl: net::sockflags = 0;
+	let fl: net::sockflag = 0;
 	for (let i = 0z; i < len(flags); i += 1) {
 		fl |= flags[i];
 	};
 	sock.op = op::ACCEPT;
 	sock.cb = cb;
-	sock.sockflags = fl;
+	sock.sockflag = fl;
 	file_epoll_ctl(sock);
 	return req { ... };
 };
@@ -148,7 +148,7 @@ fn accept_ready(
 	sock.op = op::NONE;
 	file_epoll_ctl(sock);
 
-	const r = tcp::accept(sock.fd, sock.sockflags);
+	const r = tcp::accept(sock.fd, sock.sockflag);
 	match (r) {
 	case let fd: net::socket =>
 		// TODO: Bubble up errors from here?

@@ -45,7 +45,7 @@ export type file = struct {
 			wvbuf: rt::iovec,
 			wvec: []rt::iovec,
 		},
-		sockflags: net::sockflags,
+		sockflag: net::sockflag,
 		sigmask: signal::sigset,
 		sendrecv: struct {
 			sbuf: []u8,
