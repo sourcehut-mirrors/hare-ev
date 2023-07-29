@@ -29,6 +29,7 @@ export fn main() void = {
 
 	let state = state {
 		loop = &loop,
+		src = [0: u8, 0: u8, 0: u8, 0: u8],
 		...
 	};
 	ev::setuser(sock, &state);
