@@ -23,6 +23,7 @@ export type op = enum u64 {
 };
 
 export type fflags = enum uint {
+	NONE = 0,
 	BLOCKING = 1 << 31,
 };
 
@@ -61,6 +62,7 @@ export fn register(
 	fd: io::file,
 ) (*file | errors::error) = {
 	const file = alloc(file {
+		flags = fflags::NONE,
 		fd = fd,
 		ev = loop,
 		op = op::NONE,
