@@ -33,7 +33,7 @@ export fn readv(
 
 	file.op |= op::READV;
 	file.cb = cb;
-	file.rvec = vec;
+	file.rvec = vec: []rt::iovec;
 	file_epoll_ctl(file);
 	return req { ... };
 };
@@ -48,7 +48,8 @@ fn readv_ready(file: *file, ev: *rt::epoll_event) void = {
 	if (ev.events & rt::EPOLLHUP != 0) {
 		cb(file, io::EOF);
 	} else {
-		const r = io::readv(file.fd, file.rvec...);
+		const vec = file.rvec: []io::vector;
+		const r = io::readv(file.fd, vec...);
 		cb(file, r);
 	};
 };
@@ -85,7 +86,7 @@ export fn writev(
 
 	file.op |= op::WRITEV;
 	file.cb2 = cb;
-	file.wvec = vec;
+	file.wvec = vec: []rt::iovec;
 	file_epoll_ctl(file);
 	return req { ... };
 };
@@ -93,7 +94,8 @@ export fn writev(
 fn writev_ready(file: *file, ev: *rt::epoll_event) void = {
 	assert(file.op & op::WRITEV != 0);
 	assert(file.cb != null);
-	const r = io::writev(file.fd, file.wvec...);
+	const vec = file.wvec: []io::vector;
+	const r = io::writev(file.fd, vec...);
 	const cb = file.cb2: *writecb;
 	file.op &= ~op::WRITEV;
 	file_epoll_ctl(file);
