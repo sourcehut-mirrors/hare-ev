@@ -33,9 +33,9 @@ export type file = struct {
 
 	flags: fflags,
 	op: op,
-	cb: nullable *void,
-	cb2: nullable *void,
-	user: nullable *void,
+	cb: nullable *opaque,
+	cb2: nullable *opaque,
+	user: nullable *opaque,
 
 	// Operation-specific data
 	union {
@@ -118,14 +118,14 @@ export fn close(file: *file) void = {
 };
 
 // Sets the user data field on this file object to the provided object.
-export fn setuser(file: *file, user: nullable *void) void = {
+export fn setuser(file: *file, user: nullable *opaque) void = {
 	file.user = user;
 };
 
 // Returns the user data field from this file object. If the field was null, an
 // assertion is raised.
-export fn getuser(file: *file) *void = {
-	return file.user as *void;
+export fn getuser(file: *file) *opaque = {
+	return file.user as *opaque;
 };
 
 // Returns the file descriptor for a given file. Note that ev assumes that it

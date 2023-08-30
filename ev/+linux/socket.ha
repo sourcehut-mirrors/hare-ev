@@ -42,7 +42,7 @@ export fn connect_udp(
 	return file;
 };
 
-export type connectcb = fn(result: (*file | net::error), user: nullable *void) void;
+export type connectcb = fn(result: (*file | net::error), user: nullable *opaque) void;
 
 // Creates a socket and connects to a given IP address and port over TCP.
 //
@@ -54,7 +54,7 @@ export type connectcb = fn(result: (*file | net::error), user: nullable *void) v
 //	let user: state = // ...
 // 	ev::connect_tcp(&loop, &connected, addr, port, &user);
 //
-// 	fn connected(result: (*ev::file | net::error), user: nullable *void) void = {
+// 	fn connected(result: (*ev::file | net::error), user: nullable *opaque) void = {
 // 		let user = user: *state;
 // 	};
 //
@@ -69,16 +69,16 @@ export fn connect_tcp(
 	cb: *connectcb,
 	addr: ip::addr,
 	port: u16,
-	opts: (net::sockflag | *void)...
+	opts: (net::sockflag | *opaque)...
 ) (void | net::error | errors::error) = {
 	// XXX: This doesn't let us set keepalive
 	let opt: net::sockflag = 0;
-	let user: nullable *void = null;
+	let user: nullable *opaque = null;
 	for (let i = 0z; i < len(opts); i += 1) {
 		match (opts[i]) {
 		case let o: net::sockflag =>
 			opt |= o;
-		case let u: *void =>
+		case let u: *opaque =>
 			assert(user == null);
 			user = u;
 		};

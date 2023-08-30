@@ -42,7 +42,7 @@ export fn main() void = {
 	for (ev::dispatch(&loop, -1)!) void;
 };
 
-fn connected(result: (*ev::file | net::error), user: nullable *void) void = {
+fn connected(result: (*ev::file | net::error), user: nullable *opaque) void = {
 	const state = user: *state;
 	const sock = match (result) {
 	case let err: net::error =>
