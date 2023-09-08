@@ -40,10 +40,10 @@ export type file = struct {
 	// Operation-specific data
 	union {
 		struct {
-			rvbuf: rt::iovec,
-			rvec: []rt::iovec,
-			wvbuf: rt::iovec,
-			wvec: []rt::iovec,
+			rvbuf: io::vector,
+			rvec: []io::vector,
+			wvbuf: io::vector,
+			wvec: []io::vector,
 		},
 		sockflag: net::sockflag,
 		sigmask: signal::sigset,
