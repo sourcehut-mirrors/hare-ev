@@ -33,7 +33,7 @@ export fn readv(
 
 	file.op |= op::READV;
 	file.cb = cb;
-	file.rvec = vec: []rt::iovec;
+	file.rvec = vec;
 	file_epoll_ctl(file);
 	return req { ... };
 };
@@ -86,7 +86,7 @@ export fn writev(
 
 	file.op |= op::WRITEV;
 	file.cb2 = cb;
-	file.wvec = vec: []rt::iovec;
+	file.wvec = vec;
 	file_epoll_ctl(file);
 	return req { ... };
 };
