@@ -20,7 +20,7 @@ type client = struct {
 	sock: *ev::file,
 	addr: ip::addr,
 	port: u16,
-	buf: [os::BUFSIZ]u8,
+	buf: [os::BUFSZ]u8,
 	wbuf: []u8,
 };
 

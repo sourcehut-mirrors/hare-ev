@@ -11,8 +11,8 @@ type state = struct {
 	stdin: *ev::file,
 	stdout: *ev::file,
 	sock: *ev::file,
-	stdbuf: [os::BUFSIZ]u8,
-	netbuf: [os::BUFSIZ]u8,
+	stdbuf: [os::BUFSZ]u8,
+	netbuf: [os::BUFSZ]u8,
 	wbuf: []u8,
 };
 
