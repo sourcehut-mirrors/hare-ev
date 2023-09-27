@@ -18,7 +18,7 @@ export fn readable(
 	file.op |= op::READABLE;
 	file.cb = cb;
 	file_epoll_ctl(file);
-	return req { ... };
+	return mkreq(&readable_cancel, file);
 };
 
 fn readable_ready(file: *file, ev: *rt::epoll_event) void = {
@@ -28,6 +28,13 @@ fn readable_ready(file: *file, ev: *rt::epoll_event) void = {
 	file.op &= ~op::READABLE;
 	file_epoll_ctl(file);
 	cb(file);
+};
+
+fn readable_cancel(req: *req) void = {
+	const file = req.user: *file;
+	assert(file.op & op::READABLE != 0);
+	file.op &= ~op::READABLE;
+	file_epoll_ctl(file);
 };
 
 // A callback for a [[writable]] operation.
@@ -48,7 +55,7 @@ export fn writable(
 	file.op |= op::WRITABLE;
 	file.cb = cb;
 	file_epoll_ctl(file);
-	return req { ... };
+	return mkreq(&writable_cancel, file);
 };
 
 fn writable_ready(file: *file, ev: *rt::epoll_event) void = {
@@ -58,4 +65,11 @@ fn writable_ready(file: *file, ev: *rt::epoll_event) void = {
 	file.op &= ~op::WRITABLE;
 	file_epoll_ctl(file);
 	cb(file);
+};
+
+fn writable_cancel(req: *req) void = {
+	const file = req.user: *file;
+	assert(file.op & op::WRITABLE != 0);
+	file.op &= ~op::WRITABLE;
+	file_epoll_ctl(file);
 };

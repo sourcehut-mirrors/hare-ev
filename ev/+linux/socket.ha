@@ -70,7 +70,7 @@ export fn connect_tcp(
 	addr: ip::addr,
 	port: u16,
 	opts: (net::sockflag | *opaque)...
-) (void | net::error | errors::error) = {
+) (req | net::error | errors::error) = {
 	// XXX: This doesn't let us set keepalive
 	let opt: net::sockflag = 0;
 	let user: nullable *opaque = null;
@@ -89,6 +89,7 @@ export fn connect_tcp(
 	file.cb = cb;
 	file.op = op::CONNECT_TCP;
 	file_epoll_ctl(file);
+	return mkreq(&connect_tcp_cancel, file);
 };
 
 fn connect_tcp_ready(
@@ -99,7 +100,7 @@ fn connect_tcp_ready(
 	assert(ev.events & rt::EPOLLOUT != 0);
 	assert(sock.cb != null);
 	const cb = sock.cb: *connectcb;
-	sock.op = op::NONE;
+	sock.op &= ~op::CONNECT_TCP;
 	file_epoll_ctl(sock);
 
 	let errno = 0i, optsz = size(int): u32;
@@ -114,6 +115,13 @@ fn connect_tcp_ready(
 		rt::fcntl(sock.fd, rt::F_SETFL, fl & ~rt::O_NONBLOCK)!;
 		cb(sock, sock.user);
 	};
+};
+
+fn connect_tcp_cancel(req: *req) void = {
+	const sock = req.user: *file;
+	assert(sock.op == op::CONNECT_TCP);
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
 };
 
 // A callback for an [[accept]] operation.
@@ -134,7 +142,7 @@ export fn accept(
 	sock.cb = cb;
 	sock.sockflag = fl;
 	file_epoll_ctl(sock);
-	return req { ... };
+	return mkreq(&accept_cancel, sock);
 };
 
 fn accept_ready(
@@ -159,6 +167,13 @@ fn accept_ready(
 	};
 };
 
+fn accept_cancel(req: *req) void = {
+	const sock = req.user: *file;
+	assert(sock.op == op::ACCEPT);
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
+};
+
 // TODO: Support recv & send in parallel
 
 // Callback for a [[recvfrom]] operation. The second parameter is either an
@@ -180,7 +195,7 @@ export fn recvfrom(
 	sock.cb = cb;
 	sock.sendrecv.rbuf = buf;
 	file_epoll_ctl(sock);
-	return req { ... };
+	return mkreq(&recvfrom_cancel, sock);
 };
 
 fn recvfrom_ready(
@@ -202,6 +217,13 @@ fn recvfrom_ready(
 	};
 };
 
+fn recvfrom_cancel(req: *req) void = {
+	const sock = req.user: *file;
+	assert(sock.op == op::RECVFROM);
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
+};
+
 // Callback for a [[recv]] operation.
 export type recvcb = fn(file: *file, r: (size | net::error)) void;
 
@@ -216,7 +238,7 @@ export fn recv(
 	sock.cb = cb;
 	sock.sendrecv.rbuf = buf;
 	file_epoll_ctl(sock);
-	return req { ... };
+	return mkreq(&recv_cancel, sock);
 };
 
 fn recv_ready(
@@ -233,6 +255,13 @@ fn recv_ready(
 	cb(sock, r);
 };
 
+fn recv_cancel(req: *req) void = {
+	const sock = req.user: *file;
+	assert(sock.op == op::RECV);
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
+};
+
 // Callback for a [[send]] or [[sendto]] operation.
 export type sendtocb = fn(file: *file, r: (size | net::error)) void;
 
@@ -247,7 +276,7 @@ export fn send(
 	sock.cb = cb;
 	sock.sendrecv.sbuf = buf;
 	file_epoll_ctl(sock);
-	return req { ... };
+	return mkreq(&send_cancel, sock);
 };
 
 fn send_ready(
@@ -262,6 +291,13 @@ fn send_ready(
 
 	const r = udp::send(sock.fd, sock.sendrecv.sbuf);
 	cb(sock, r);
+};
+
+fn send_cancel(req: *req) void = {
+	const sock = req.user: *file;
+	assert(sock.op == op::SEND);
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
 };
 
 // Schedules a send operation on a socket.
@@ -279,7 +315,7 @@ export fn sendto(
 	sock.sendrecv.dest = dest;
 	sock.sendrecv.port = port;
 	file_epoll_ctl(sock);
-	return req { ... };
+	return mkreq(&sendto_cancel, sock);
 };
 
 fn sendto_ready(
@@ -299,4 +335,11 @@ fn sendto_ready(
 		sock.sendrecv.port,
 	);
 	cb(sock, r);
+};
+
+fn sendto_cancel(req: *req) void = {
+	const sock = req.user: *file;
+	assert(sock.op == op::SENDTO);
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
 };

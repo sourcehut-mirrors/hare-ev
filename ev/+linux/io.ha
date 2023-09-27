@@ -35,7 +35,7 @@ export fn readv(
 	file.cb = cb;
 	file.rvec = vec;
 	file_epoll_ctl(file);
-	return req { ... };
+	return mkreq(&readv_cancel, file);
 };
 
 fn readv_ready(file: *file, ev: *rt::epoll_event) void = {
@@ -52,6 +52,13 @@ fn readv_ready(file: *file, ev: *rt::epoll_event) void = {
 		const r = io::readv(file.fd, vec...);
 		cb(file, r);
 	};
+};
+
+fn readv_cancel(req: *req) void = {
+	const file = req.user: *file;
+	assert(file.op & op::READV != 0);
+	file.op &= ~op::READV;
+	file_epoll_ctl(file);
 };
 
 // A callback for a [[write]] or [[writev]] operation.
@@ -88,7 +95,7 @@ export fn writev(
 	file.cb2 = cb;
 	file.wvec = vec;
 	file_epoll_ctl(file);
-	return req { ... };
+	return mkreq(&writev_cancel, file);
 };
 
 fn writev_ready(file: *file, ev: *rt::epoll_event) void = {
@@ -100,4 +107,11 @@ fn writev_ready(file: *file, ev: *rt::epoll_event) void = {
 	file.op &= ~op::WRITEV;
 	file_epoll_ctl(file);
 	cb(file, r);
+};
+
+fn writev_cancel(req: *req) void = {
+	const file = req.user: *file;
+	assert(file.op & op::WRITEV != 0);
+	file.op &= ~op::WRITEV;
+	file_epoll_ctl(file);
 };
