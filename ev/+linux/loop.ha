@@ -154,11 +154,11 @@ export fn dispatch(
 		};
 		const pending = file.op;
 		if (ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0
-				&& pending & op::READV != 0) {
+				&& file.op & op::READV != 0) {
 			readv_ready(file, ev);
 		};
 		if (ev.events & (rt::EPOLLOUT | rt::EPOLLHUP) != 0
-				&& pending & op::WRITEV != 0) {
+				&& file.op & op::WRITEV != 0) {
 			writev_ready(file, ev);
 		};
 		switch (pending) {
