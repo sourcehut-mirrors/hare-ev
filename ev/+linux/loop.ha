@@ -5,9 +5,19 @@ use time;
 use types;
 use unix::signal;
 
+// Dispatch callback. See [[ondispatch]].
+export type dispatchcb = fn(loop: *loop, user: nullable *opaque) void;
+
+export type ondispatch = struct {
+	cb: *dispatchcb,
+	user: nullable *opaque,
+	loop: *loop,
+};
+
 export type loop = struct {
 	fd: io::file,
 	events: []rt::epoll_event,
+	dispatch: []*ondispatch,
 	stop: bool,
 };
 
@@ -30,6 +40,7 @@ export fn newloop() (loop | errors::error) = {
 				fd = 0,
 			}
 		}...], 256),
+		dispatch = [],
 		stop = false,
 	};
 };
@@ -48,6 +59,35 @@ export fn finish(loop: *loop) void = {
 // not be available for all implementations.
 export fn loop_file(loop: *loop) io::file = {
 	return loop.fd;
+};
+
+// Registers a callback to be invoked before the event loop dispatches pending
+// I/O requests. The callback may schedule additional I/O requests to be
+// processed in this batch.
+export fn do(
+	loop: *loop,
+	cb: *dispatchcb,
+	user: nullable *opaque,
+) req = {
+	const dispatch = alloc(ondispatch {
+		cb = cb,
+		user = user,
+		loop = loop,
+	});
+	append(loop.dispatch, dispatch);
+	return mkreq(&do_cancel, dispatch);
+};
+
+fn do_cancel(req: *req) void = {
+	const dispatch = req.user: *ondispatch;
+	const loop = dispatch.loop;
+	for (let i = 0z; i < len(loop.dispatch); i += 1) {
+		if (loop.dispatch[i] == dispatch) {
+			delete(loop.dispatch[i]);
+			break;
+		};
+	};
+	free(dispatch);
 };
 
 // Dispatches the event loop, waiting for new events and calling their callbacks
@@ -74,6 +114,16 @@ export fn dispatch(
 	if (loop.stop) {
 		return false;
 	};
+
+	let todo = loop.dispatch;
+	loop.dispatch = [];
+	for (let i = 0z; i < len(todo); i += 1) {
+		const dispatch = todo[i];
+		dispatch.cb(loop, dispatch.user);
+		free(dispatch);
+	};
+	free(todo);
+
 	if (len(loop.events) == 0) {
 		return true;
 	};
