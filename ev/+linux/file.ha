@@ -10,16 +10,17 @@ export type op = enum u64 {
 	READV    = 1 << 0,
 	WRITEV   = 1 << 1,
 
-	READABLE    = 1 << 16,
-	WRITABLE    = 2 << 16,
-	ACCEPT      = 3 << 16,
-	CONNECT_TCP = 4 << 16,
-	SIGNAL      = 5 << 16,
-	TIMER       = 6 << 16,
-	SENDTO      = 7 << 16,
-	RECVFROM    = 8 << 16,
-	SEND        = 9 << 16,
-	RECV        = 10 << 16,
+	READABLE     = 1 << 16,
+	WRITABLE     = 2 << 16,
+	ACCEPT       = 3 << 16,
+	CONNECT_TCP  = 4 << 16,
+	CONNECT_UNIX = 5 << 16,
+	SIGNAL       = 6 << 16,
+	TIMER        = 7 << 16,
+	SENDTO       = 8 << 16,
+	RECVFROM     = 9 << 16,
+	SEND         = 10 << 16,
+	RECV         = 11 << 16,
 };
 
 export type fflags = enum uint {
@@ -152,7 +153,7 @@ fn file_epoll_ctl(file: *file) void = {
 	switch (file.op) {
 	case op::ACCEPT =>
 		events |= rt::EPOLLIN;
-	case op::CONNECT_TCP =>
+	case op::CONNECT_TCP, op::CONNECT_UNIX =>
 		events |= rt::EPOLLOUT;
 	case op::SIGNAL =>
 		events |= rt::EPOLLIN;

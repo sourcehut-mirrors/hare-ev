@@ -3,6 +3,7 @@ use net;
 use net::ip;
 use net::tcp;
 use net::udp;
+use net::unix;
 use rt;
 
 // Creates a socket which listens for incoming TCP connections on the given
@@ -26,6 +27,16 @@ export fn listen_udp(
 	opts: udp::listen_option...
 ) (*file | net::error | errors::error) = {
 	const sock = udp::listen(addr, port, opts...)?;
+	return register(loop, sock)?;
+};
+
+// Creates a UNIX domain socket at the given path.
+export fn listen_unix(
+	loop: *loop,
+	addr: unix::addr,
+	opts: unix::listen_option...
+) (*file | net::error | errors::error) = {
+	const sock = unix::listen(addr, opts...)?;
 	return register(loop, sock)?;
 };
 
@@ -92,6 +103,52 @@ export fn connect_tcp(
 	return mkreq(&connect_tcp_cancel, file);
 };
 
+// Connects to a UNIX domain socket.
+//
+// The variadic arguments accept [[net::sockflag]] and/or no more than one user
+// data pointer. If the user data pointer is provided, it will be passed to the
+// callback. This allows the user to pass a state object through the connection
+// process:
+//
+//	let user: state = // ...
+// 	ev::connect_user(&loop, &connected, addr, &user);
+//
+// 	fn connected(result: (*ev::file | net::error), user: nullable *opaque) void = {
+// 		let user = user: *state;
+// 	};
+//
+// The user data object provided will be assigned to the [[file]] which is
+// provided to the callback after the connection is established.
+//
+// If you don't need a user data object you can just omit it:
+//
+// 	ev::connect_unix(&loop, &connected, addr, &user);
+export fn connect_unix(
+	loop: *loop,
+	cb: *connectcb,
+	addr: unix::addr,
+	opts: (net::sockflag | *opaque)...
+) (req | net::error | errors::error) = {
+	let opt: net::sockflag = 0;
+	let user: nullable *opaque = null;
+	for (let i = 0z; i < len(opts); i += 1) {
+		match (opts[i]) {
+		case let o: net::sockflag =>
+			opt |= o;
+		case let u: *opaque =>
+			assert(user == null);
+			user = u;
+		};
+	};
+	const sock = unix::connect(addr, opt | net::sockflag::NONBLOCK)?;
+	let file = register(loop, sock)?;
+	file.user = user;
+	file.cb = cb;
+	file.op = op::CONNECT_UNIX;
+	file_epoll_ctl(file);
+	return mkreq(&connect_unix_cancel, file);
+};
+
 fn connect_tcp_ready(
 	sock: *file,
 	ev: *rt::epoll_event,
@@ -117,9 +174,41 @@ fn connect_tcp_ready(
 	};
 };
 
+fn connect_unix_ready(
+	sock: *file,
+	ev: *rt::epoll_event,
+) void = {
+	assert(sock.op == op::CONNECT_UNIX);
+	assert(ev.events & rt::EPOLLOUT != 0);
+	assert(sock.cb != null);
+	const cb = sock.cb: *connectcb;
+	sock.op &= ~op::CONNECT_UNIX;
+	file_epoll_ctl(sock);
+
+	let errno = 0i, optsz = size(int): u32;
+	rt::getsockopt(sock.fd, rt::SOL_SOCKET, rt::SO_ERROR, &errno, &optsz)!;
+	if (errno != 0) {
+		cb(errors::errno(errno), sock.user);
+		close(sock);
+	} else {
+		// XXX: If the user puts NONBLOCK into the opts provided at
+		// [[connect_unix]] we could try to preserve that here
+		const fl = rt::fcntl(sock.fd, rt::F_GETFL, void)!;
+		rt::fcntl(sock.fd, rt::F_SETFL, fl & ~rt::O_NONBLOCK)!;
+		cb(sock, sock.user);
+	};
+};
+
 fn connect_tcp_cancel(req: *req) void = {
 	const sock = req.user: *file;
 	assert(sock.op == op::CONNECT_TCP);
+	sock.op = op::NONE;
+	file_epoll_ctl(sock);
+};
+
+fn connect_unix_cancel(req: *req) void = {
+	const sock = req.user: *file;
+	assert(sock.op == op::CONNECT_UNIX);
 	sock.op = op::NONE;
 	file_epoll_ctl(sock);
 };

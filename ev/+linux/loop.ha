@@ -172,6 +172,8 @@ export fn dispatch(
 			accept_ready(file, ev);
 		case op::CONNECT_TCP =>
 			connect_tcp_ready(file, ev);
+		case op::CONNECT_UNIX =>
+			connect_unix_ready(file, ev);
 		case op::SIGNAL =>
 			signal_ready(file, ev);
 		case op::TIMER =>
