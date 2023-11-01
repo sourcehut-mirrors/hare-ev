@@ -18,7 +18,7 @@ export fn main() void = {
 	const loop = ev::newloop()!;
 	defer ev::finish(&loop);
 
-	const uri = net::uri::parse(os::args[1])!;
+	const uri = uri::parse(os::args[1])!;
 	defer uri::finish(&uri);
 
 	let state = state {
