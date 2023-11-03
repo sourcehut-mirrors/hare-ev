@@ -32,6 +32,8 @@ export fn strerror(err: error) const str = {
 		return dns::strerror(err);
 	case let err: hosts::error =>
 		return hosts::strerror(err);
+	case let err: errors::error =>
+		return errors::strerror(err);
 	};
 };
 
