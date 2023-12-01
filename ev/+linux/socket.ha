@@ -74,7 +74,7 @@ export type connectcb = fn(result: (*file | net::error), user: nullable *opaque)
 //
 // If you don't need a user data object you can just omit it:
 //
-// 	ev::connect_tcp(&loop, &connected, addr, port, &user);
+// 	ev::connect_tcp(&loop, &connected, addr, port);
 export fn connect_tcp(
 	loop: *loop,
 	cb: *connectcb,
@@ -122,7 +122,7 @@ export fn connect_tcp(
 //
 // If you don't need a user data object you can just omit it:
 //
-// 	ev::connect_unix(&loop, &connected, addr, &user);
+// 	ev::connect_unix(&loop, &connected, addr);
 export fn connect_unix(
 	loop: *loop,
 	cb: *connectcb,
