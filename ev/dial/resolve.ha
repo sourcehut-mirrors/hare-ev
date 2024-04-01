@@ -212,8 +212,8 @@ fn query_cb_v6(user: nullable *opaque, r: (*dns::message | dns::error)) void = {
 };
 
 fn collect_answers(addrs: *[]ip::addr, answers: *[]dns::rrecord) void = {
-	for (let i = 0z; i < len(answers); i += 1) {
-		match (answers[i].rdata) {
+	for (let answer &.. answers) {
+		match (answer.rdata) {
 		case let addr: dns::aaaa =>
 			append(addrs, addr: ip::addr);
 		case let addr: dns::a =>

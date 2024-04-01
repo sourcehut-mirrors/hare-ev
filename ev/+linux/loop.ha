@@ -117,8 +117,7 @@ export fn dispatch(
 
 	let todo = loop.dispatch;
 	loop.dispatch = [];
-	for (let i = 0z; i < len(todo); i += 1) {
-		const dispatch = todo[i];
+	for (let dispatch .. todo) {
 		dispatch.cb(loop, dispatch.user);
 		free(dispatch);
 	};
@@ -146,8 +145,7 @@ export fn dispatch(
 		};
 	};
 
-	for (let i = 0; i < nevent; i += 1) {
-		const ev = &loop.events[i];
+	for (let ev &.. loop.events) {
 		const file = ev.data.ptr: *file;
 		if (ev.events == 0) {
 			continue;

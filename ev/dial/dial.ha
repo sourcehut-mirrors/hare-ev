@@ -23,14 +23,12 @@ export fn dial(
 	cb: *dialcb,
 	user: nullable *opaque,
 ) (ev::req | error) = {
-	for (let i = 0z; i < len(default_protocols); i += 1) {
-		const p = default_protocols[i];
+	for (const p .. default_protocols) {
 		if (p.name == proto) {
 			return p.dial(loop, address, service, cb, user);
 		};
 	};
-	for (let i = 0z; i < len(protocols); i += 1) {
-		const p = protocols[i];
+	for (const p .. protocols) {
 		if (p.name == proto) {
 			return p.dial(loop, address, service, cb, user);
 		};

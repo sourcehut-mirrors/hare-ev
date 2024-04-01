@@ -68,11 +68,13 @@ export fn query(
 	// as it is assumed they can fit into the kernel's internal send buffer
 	// and will finish without blocking
 	const buf = state.buf[..z];
-	for (let i = 0z; i < len(servers); i += 1) match (servers[i]) {
-	case ip::addr4 =>
-		udp::sendto(ev::getfd(socket4), buf, servers[i], 53)?;
-	case ip::addr6 =>
-		udp::sendto(ev::getfd(socket6), buf, servers[i], 53)?;
+	for (const server .. servers) {
+		match (server) {
+		case ip::addr4 =>
+			udp::sendto(ev::getfd(socket4), buf, server, 53)?;
+		case ip::addr6 =>
+			udp::sendto(ev::getfd(socket6), buf, server, 53)?;
+		};
 	};
 
 	state.r4 = ev::recvfrom(socket4, &qrecvcb, state.buf);
