@@ -61,12 +61,14 @@ export type file = struct {
 export fn register(
 	loop: *loop,
 	fd: io::file,
+	user: nullable *opaque = null,
 ) (*file | errors::error) = {
 	const file = alloc(file {
 		flags = fflags::NONE,
 		fd = fd,
 		ev = loop,
 		op = op::NONE,
+		user = user,
 		...
 	});
 

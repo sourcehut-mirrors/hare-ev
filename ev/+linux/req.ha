@@ -4,7 +4,7 @@ export type req = struct {
 };
 
 // Makes a new request object.
-export fn mkreq(cancel: *cancelfn, user: nullable *opaque) req = {
+export fn mkreq(cancel: *cancelfn, user: nullable *opaque = null) req = {
 	return req {
 		cancel = cancel,
 		user = user,

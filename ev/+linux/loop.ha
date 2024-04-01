@@ -67,7 +67,7 @@ export fn loop_file(loop: *loop) io::file = {
 export fn do(
 	loop: *loop,
 	cb: *dispatchcb,
-	user: nullable *opaque,
+	user: nullable *opaque = null,
 ) req = {
 	const dispatch = alloc(ondispatch {
 		cb = cb,

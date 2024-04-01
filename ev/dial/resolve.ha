@@ -36,7 +36,7 @@ export fn resolve(
 	addr: str,
 	service: str,
 	cb: *resolvecb,
-	user: nullable *opaque
+	user: nullable *opaque = null
 ) (ev::req | error) = {
 	// TODO: Reduce duplication with net::dial
 	let state = alloc(resolve_state {

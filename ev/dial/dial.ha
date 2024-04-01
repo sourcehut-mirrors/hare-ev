@@ -21,7 +21,7 @@ export fn dial(
 	address: str,
 	service: str,
 	cb: *dialcb,
-	user: nullable *opaque,
+	user: nullable *opaque = null,
 ) (ev::req | error) = {
 	for (const p .. default_protocols) {
 		if (p.name == proto) {
@@ -47,7 +47,7 @@ export fn dial_uri(
 	proto: str,
 	uri: *uri::uri,
 	cb: *dialcb,
-	user: nullable *opaque,
+	user: nullable *opaque = null,
 ) (ev::req | error) = {
 	if (uri.host is str && len(uri.host as str) > HOST_MAX) {
 		return invalid_address;
