@@ -145,6 +145,10 @@ export fn dispatch(
 		};
 	};
 
+	if (nevent == 0) {
+		return true;
+	};
+
 	for (let ev &.. loop.events) {
 		const file = ev.data.ptr: *file;
 		if (ev.events == 0) {
