@@ -109,6 +109,16 @@ export fn unregister(file: *file) void = {
 	if (file.op == op::SIGNAL) {
 		signal_restore(file);
 	};
+
+	for (let ev &.. loop.events) {
+		if (file != ev.data.ptr) {
+			continue;
+		};
+		ev.events = 0;
+		ev.data.ptr = null: *opaque;
+		ev.data.fd = 0;
+		break;
+	};
 	free(file);
 };
 
