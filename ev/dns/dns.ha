@@ -39,7 +39,8 @@ export fn query(
 	servers: ip::addr...
 ) (ev::req | dns::error | net::error | errors::error) = {
 	if (len(servers) == 0) {
-		servers = resolvconf::load();
+		const rconf = resolvconf::load();
+		servers = rconf.nameservers;
 	};
 	if (len(servers) == 0) {
 		// Fall back to localhost
