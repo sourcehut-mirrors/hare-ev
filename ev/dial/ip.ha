@@ -6,10 +6,12 @@
 // Provides default dialers for tcp and udp
 use errors;
 use ev;
-use net;
+use math::random;
 use net::ip;
 use net::tcp;
 use net::udp;
+use net;
+use time;
 
 type tcp_dialer = struct {
 	loop: *ev::loop,
@@ -17,6 +19,7 @@ type tcp_dialer = struct {
 	user: nullable *opaque,
 	req: ev::req,
 	ip: []ip::addr,
+	n: uint,
 	port: u16,
 };
 
@@ -60,11 +63,9 @@ fn dial_tcp_resolvecb(
 };
 
 fn dial_tcp_connect(state: *tcp_dialer) void = {
-	// TODO: Select IPs from a round-robin, or re-attempt on other IPs?
-	// TODO: Detect supported networks? i.e. v4/v6
 	const req = match (ev::connect_tcp(state.loop,
 			&dial_tcp_connectcb,
-			state.ip[0], state.port,
+			state.ip[state.n], state.port,
 			state)) {
 	case let err: (net::error | errors::error) =>
 		dial_tcp_complete(state, err);
@@ -84,7 +85,15 @@ fn dial_tcp_connectcb(
 	case let sock: *ev::file =>
 		ev::setuser(sock, null);
 		dial_tcp_complete(state, sock);
+		return;
 	case let err: net::error =>
+		if (err is errors::netunreachable) {
+			state.n += 1;
+			if (state.n < len(state.ip)) {
+				dial_tcp_connect(state);
+				return;
+			};
+		};
 		dial_tcp_complete(state, err);
 	};
 };
@@ -110,6 +119,7 @@ type udp_dialer = struct {
 	user: nullable *opaque,
 	req: ev::req,
 	ip: []ip::addr,
+	n: uint,
 	port: u16,
 };
 
@@ -153,14 +163,30 @@ fn dial_udp_resolvecb(
 };
 
 fn dial_udp_connect(state: *udp_dialer) void = {
-	match (ev::connect_udp(state.loop,
-			state.ip[0], state.port)) {
-	case let err: (net::error | errors::error) =>
-		dial_udp_complete(state, err);
-		return;
-	case let sock: *ev::file =>
-		dial_udp_complete(state, sock);
-		return;
+	for (true) {
+		match (ev::connect_udp(state.loop, state.ip[state.n], state.port)) {
+		case let err: net::error =>
+			if (err is errors::netunreachable) {
+				state.n += 1;
+				if (state.n < len(state.ip)) {
+					continue;
+				};
+			};
+			dial_udp_complete(state, err);
+			break;
+		case let err: errors::error =>
+			dial_udp_complete(state, err);
+			if (err is errors::netunreachable) {
+				state.n += 1;
+				if (state.n < len(state.ip)) {
+					continue;
+				};
+			};
+			break;
+		case let sock: *ev::file =>
+			dial_udp_complete(state, sock);
+			break;
+		};
 	};
 };
 
