@@ -61,9 +61,12 @@ export fn loop_file(loop: *loop) io::file = {
 	return loop.fd;
 };
 
-// Registers a callback to be invoked before the event loop dispatches pending
-// I/O requests. The callback may schedule additional I/O requests to be
+// Registers a callback to be invoked before the next call to [[dispatch]]
+// processes requests. The callback may schedule additional I/O requests to be
 // processed in this batch.
+//
+// Dispatch callbacks are only called once. If you wish to schedule another
+// dispatch callback after the first, call [[do]] again.
 export fn do(
 	loop: *loop,
 	cb: *dispatchcb,
