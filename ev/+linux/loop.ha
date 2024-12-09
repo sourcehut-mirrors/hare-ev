@@ -152,7 +152,7 @@ export fn dispatch(
 		return true;
 	};
 
-	for (let ev &.. loop.events) {
+	for (let ev &.. loop.events[..nevent]) {
 		const file = ev.data.ptr: *file;
 		if (ev.events == 0) {
 			continue;
