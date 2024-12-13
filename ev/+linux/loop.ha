@@ -1,6 +1,7 @@
 use errors;
 use io;
 use rt;
+use sort;
 use time;
 use types;
 use unix::signal;
@@ -151,6 +152,8 @@ export fn dispatch(
 	if (nevent == 0) {
 		return true;
 	};
+
+	sort::sort(loop.events[..nevent], size(rt::epoll_event), &sort_events);
 
 	for (let ev &.. loop.events[..nevent]) {
 		const file = ev.data.ptr: *file;

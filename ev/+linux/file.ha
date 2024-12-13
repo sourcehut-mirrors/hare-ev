@@ -38,6 +38,8 @@ export type file = struct {
 	cb2: nullable *opaque,
 	user: nullable *opaque,
 
+	prio: int,
+
 	// Operation-specific data
 	union {
 		struct {
@@ -151,6 +153,26 @@ export fn getfd(file: *file) io::file = {
 // Returns the event loop for a given file.
 export fn getloop(file: *file) *loop = {
 	return file.ev;
+};
+
+// Sets the priority on this file object. Used to priorize concurrent events,
+// starting on the next dispatch. The lowest run first.
+export fn setprio(file: *file, prio: int) void = {
+	file.prio = prio;
+};
+
+fn sort_events(a: const *opaque, b: const *opaque) int = {
+	const a = a: *rt::epoll_event;
+	const b = b: *rt::epoll_event;
+
+	if (a.data.fd == 0 || b.data.fd == 0) {
+		return 0;
+	};
+
+	const a = a.data.ptr: *file;
+	const b = b.data.ptr: *file;
+
+	return a.prio - b.prio;
 };
 
 // Updates epoll events for a given file. For internal use.
