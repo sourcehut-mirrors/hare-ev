@@ -13,7 +13,8 @@ export fn newtimer(
 	cb: *timercb,
 	clock: time::clock,
 ) (*file | errors::error) = {
-	const fd = match (rt::timerfd_create(clock, rt::TFD_CLOEXEC)) {
+	const fd = match (rt::timerfd_create(clock,
+			rt::TFD_NONBLOCK | rt::TFD_CLOEXEC)) {
 	case let fd: int =>
 		yield fd: io::file;
 	case let errno: rt::errno =>
@@ -47,7 +48,16 @@ export fn timer_configure(
 fn timer_ready(timer: *file, ev: *rt::epoll_event) void = {
 	assert(timer.op == op::TIMER);
 	let buf: [8]u8 = [0...];
-	io::read(timer.fd, buf)!;
+	match (io::read(timer.fd, buf)) {
+	case errors::again =>
+		// This can occur if the timer was reconfigured in an event
+		// handler while the expiration event was pending in the same
+		// dispatch of the event loop. Just discard the event in this
+		// case.
+		return;
+	case (io::EOF | io::error) => abort();
+	case => void;
+	};
 
 	assert(timer.cb != null);
 	const cb = timer.cb: *timercb;
