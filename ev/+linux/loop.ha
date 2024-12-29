@@ -24,7 +24,10 @@ export type loop = struct {
 
 // Creates a new event loop. The user must pass the return value to [[finish]]
 // to free associated resources when done using the loop.
-export fn newloop() (loop | errors::error) = {
+//
+// The optional "events" parameter controls how many events may be pending at
+// once. Most applications should not need to configure this parameter.
+export fn newloop(events: size = 256) (loop | errors::error) = {
 	const fd = match (rt::epoll_create1(rt::EPOLL_CLOEXEC)) {
 	case let fd: int =>
 		yield fd: io::file;
@@ -34,13 +37,12 @@ export fn newloop() (loop | errors::error) = {
 
 	return loop {
 		fd = fd,
-		// XXX: Should the number of events be customizable?
 		events = alloc([rt::epoll_event {
 			events = 0,
 			data = rt::epoll_data {
 				fd = 0,
 			}
-		}...], 256),
+		}...], events),
 		dispatch = [],
 		stop = false,
 	};
