@@ -82,8 +82,8 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 		addr = addr,
 		port = port,
 		...
-	});
-	append(server.clients, client);
+	})!;
+	append(server.clients, client)!;
 	ev::setuser(client.sock, client);
 	ev::read(client.sock, &client_read, client.buf);
 	ev::accept(server.sock, &server_accept);
