@@ -16,7 +16,7 @@ def TIMEOUT: time::duration = 3 * time::SECOND;
 // Callback for a [[query]] operation.
 export type querycb = fn(
 	user: nullable *opaque,
-	r: (*dns::message | dns::error),
+	r: (*dns::message | dns::error | nomem),
 ) void;
 
 type qstate = struct {
@@ -56,7 +56,7 @@ export fn query(
 	cb: *querycb,
 	user: nullable *opaque,
 	servers: ip::addr...
-) (ev::req | dns::error | net::error | errors::error) = {
+) (ev::req | nomem | dns::error | net::error | errors::error) = {
 	if (len(servers) == 0) {
 		const rconf = resolvconf::load();
 		servers = rconf.nameservers;
@@ -66,20 +66,31 @@ export fn query(
 		servers = [ip::LOCAL_V6, ip::LOCAL_V4];
 	};
 
+	let stateok = false;
 	const socket4 = ev::listen_udp(loop, ip::ANY_V4, 0)?;
+	defer if (!stateok) ev::close(socket4);
 	const socket6 = ev::listen_udp(loop, ip::ANY_V6, 0)?;
+	defer if (!stateok) ev::close(socket6);
+
 	const timeout = ev::newtimer(loop, &timeoutcb, time::clock::MONOTONIC)?;
+	defer if (!stateok) ev::close(timeout);
+
+	let rbuf: []u8 = alloc([0...], 512)?;
+	defer if (!stateok) free(rbuf);
+
 	let state = alloc(qstate {
 		loop = loop,
 		socket4 = socket4,
 		socket6 = socket6,
 		timer = timeout,
-		rbuf = alloc([0...], 512),
 		rid = query.header.id,
 		cb = cb,
+		rbuf = rbuf,
 		user = user,
 		...
-	});
+	})?;
+	defer if (!stateok) free(state);
+
 	state.qlen = dns::encode(state.query, query)?: u16;
 	ev::setuser(socket4, state);
 	ev::setuser(socket6, state);
@@ -101,6 +112,7 @@ export fn query(
 
 	state.r4 = ev::recvfrom(socket4, &qrecvcb, state.rbuf);
 	state.r6 = ev::recvfrom(socket6, &qrecvcb, state.rbuf);
+	stateok = true;
 	return ev::mkreq(&query_cancel, state);
 };
 
@@ -119,7 +131,7 @@ fn query_destroy(q: *qstate) void = {
 	free(q);
 };
 
-fn query_complete(q: *qstate, r: (*dns::message | dns::error)) void = {
+fn query_complete(q: *qstate, r: (*dns::message | dns::error | nomem)) void = {
 	const cb = q.cb;
 	const user = q.user;
 	cb(user, r);
@@ -262,7 +274,13 @@ fn qtcp_readlength_cb(
 
 	const rlen = endian::begetu16(q.zbuf);
 	q.rid = rlen;
-	q.rbuf = alloc([0...], rlen);
+	q.rbuf = match (alloc([0u8...], rlen)) {
+	case let rbuf: []u8 =>
+		yield rbuf;
+	case nomem =>
+		query_complete(q, nomem);
+		return;
+	};
 	q.r4 = ev::read(file, &qtcp_readdata_cb, q.rbuf);
 };
 
