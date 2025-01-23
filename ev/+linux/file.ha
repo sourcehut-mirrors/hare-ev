@@ -64,7 +64,7 @@ export fn register(
 	loop: *loop,
 	fd: io::file,
 	user: nullable *opaque = null,
-) (*file | errors::error) = {
+) (*file | errors::error | nomem) = {
 	const file = alloc(file {
 		flags = fflags::NONE,
 		fd = fd,
@@ -72,7 +72,7 @@ export fn register(
 		op = op::NONE,
 		user = user,
 		...
-	});
+	})?;
 
 	let ev = rt::epoll_event {
 		events = 0,

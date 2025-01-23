@@ -13,7 +13,7 @@ export fn listen_tcp(
 	addr: ip::addr,
 	port: u16,
 	opts: tcp::listen_option...
-) (*file | net::error | errors::error) = {
+) (*file | net::error | errors::error | nomem) = {
 	const sock = tcp::listen(addr, port, opts...)?;
 	return register(loop, sock)?;
 };
@@ -25,7 +25,7 @@ export fn listen_udp(
 	addr: ip::addr,
 	port: u16,
 	opts: udp::listen_option...
-) (*file | net::error | errors::error) = {
+) (*file | net::error | errors::error | nomem) = {
 	const sock = udp::listen(addr, port, opts...)?;
 	return register(loop, sock)?;
 };
@@ -35,7 +35,7 @@ export fn listen_unix(
 	loop: *loop,
 	addr: unix::addr,
 	opts: unix::listen_option...
-) (*file | net::error | errors::error) = {
+) (*file | net::error | errors::error | nomem) = {
 	const sock = unix::listen(addr, opts...)?;
 	return register(loop, sock)?;
 };
@@ -47,7 +47,7 @@ export fn connect_udp(
 	dest: ip::addr,
 	port: u16,
 	opts: udp::connect_option...
-) (*file | net::error | errors::error) = {
+) (*file | net::error | errors::error | nomem) = {
 	const sock = udp::connect(dest, port, opts...)?;
 	const file = register(loop, sock)?;
 	return file;
@@ -81,7 +81,7 @@ export fn connect_tcp(
 	addr: ip::addr,
 	port: u16,
 	opts: (net::sockflag | *opaque)...
-) (req | net::error | errors::error) = {
+) (req | net::error | errors::error | nomem) = {
 	// XXX: This doesn't let us set keepalive
 	let opt: net::sockflag = 0;
 	let user: nullable *opaque = null;
@@ -128,7 +128,7 @@ export fn connect_unix(
 	cb: *connectcb,
 	addr: unix::addr,
 	opts: (net::sockflag | *opaque)...
-) (req | net::error | errors::error) = {
+) (req | net::error | errors::error | nomem) = {
 	let opt: net::sockflag = 0;
 	let user: nullable *opaque = null;
 	for (let i = 0z; i < len(opts); i += 1) {

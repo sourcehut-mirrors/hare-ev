@@ -12,7 +12,7 @@ export fn newtimer(
 	loop: *loop,
 	cb: *timercb,
 	clock: time::clock,
-) (*file | errors::error) = {
+) (*file | errors::error | nomem) = {
 	const fd = match (rt::timerfd_create(clock,
 			rt::TFD_NONBLOCK | rt::TFD_CLOEXEC)) {
 	case let fd: int =>

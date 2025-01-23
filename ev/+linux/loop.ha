@@ -27,7 +27,7 @@ export type loop = struct {
 //
 // The optional "events" parameter controls how many events may be pending at
 // once. Most applications should not need to configure this parameter.
-export fn newloop(events: size = 256) (loop | errors::error) = {
+export fn newloop(events: size = 256) (loop | nomem | errors::error) = {
 	const fd = match (rt::epoll_create1(rt::EPOLL_CLOEXEC)) {
 	case let fd: int =>
 		yield fd: io::file;
@@ -42,7 +42,7 @@ export fn newloop(events: size = 256) (loop | errors::error) = {
 			data = rt::epoll_data {
 				fd = 0,
 			}
-		}...], events),
+		}...], events)?,
 		dispatch = [],
 		stop = false,
 	};
@@ -74,13 +74,13 @@ export fn do(
 	loop: *loop,
 	cb: *dispatchcb,
 	user: nullable *opaque = null,
-) req = {
+) (req | nomem) = {
 	const dispatch = alloc(ondispatch {
 		cb = cb,
 		user = user,
 		loop = loop,
-	});
-	append(loop.dispatch, dispatch);
+	})?;
+	append(loop.dispatch, dispatch)?;
 	return mkreq(&do_cancel, dispatch);
 };
 

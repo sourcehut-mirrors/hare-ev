@@ -17,7 +17,7 @@ export fn signal(
 	loop: *loop,
 	cb: *signalcb,
 	signals: signal::sig...
-) (*file | errors::error) = {
+) (*file | errors::error | nomem) = {
 	const fd = signal::signalfd(signals...)?;
 	const file = register(loop, fd)?;
 	file.op = op::SIGNAL;
@@ -36,7 +36,7 @@ fn signal_restore(file: *file) void = {
 	for (let i = 1; i < rt::NSIG; i += 1) {
 		const sig = i: signal::sig;
 		if (signal::sigset_member(&file.sigmask, sig)) {
-			static append(signals, sig);
+			static append(signals, sig)!;
 		};
 	};
 	signal::unblock(signals...);
