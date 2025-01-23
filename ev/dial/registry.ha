@@ -16,7 +16,7 @@ export type invalid_address = !void;
 export type unknown_service = !void;
 
 // Errors which can occur from dial.
-export type error = !(invalid_address | unknown_service
+export type error = !(nomem | invalid_address | unknown_service
 	| net::error | dns::error | hosts::error | errors::error);
 
 // Converts an [[error]] to a human-readable string.
@@ -86,11 +86,11 @@ let services: []service = [];
 
 // Registers a new transport-level protocol (e.g. TCP) with the dialer. The name
 // should be statically allocated.
-export fn registerproto(name: str, dial: *dialer) void = {
+export fn registerproto(name: str, dial: *dialer) (void | nomem) = {
 	append(protocols, protocol {
 		name = name,
 		dial = dial,
-	});
+	})?;
 };
 
 // Registers a new application-level service (e.g. SSH) with the dialer. Note
@@ -102,13 +102,13 @@ export fn registersvc(
 	name: str,
 	alias: []str,
 	port: u16,
-) void = {
+) (void | nomem) = {
 	append(services, service {
 		proto = proto,
 		name = name,
 		alias = alias,
 		port = port,
-	});
+	})?;
 };
 
 fn lookup_service(proto: str, service: str) (u16 | void) = {

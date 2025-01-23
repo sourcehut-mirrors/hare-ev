@@ -35,12 +35,17 @@ fn dial_tcp(
 		cb = cb,
 		user = user,
 		...
-	});
+	})?;
 
-	const req = resolve(loop, "tcp", addr,
-		service, &dial_tcp_resolvecb, state)?;
-	state.req = req;
-	return ev::mkreq(&dial_tcp_cancel, state);
+	match (resolve(loop, "tcp", addr,
+		service, &dial_tcp_resolvecb, state)) {
+	case let req: ev::req =>
+		state.req = req;
+		return ev::mkreq(&dial_tcp_cancel, state);
+	case let e: error =>
+		free(state);
+		return e;
+	};
 };
 
 fn dial_tcp_resolvecb(
@@ -135,12 +140,17 @@ fn dial_udp(
 		cb = cb,
 		user = user,
 		...
-	});
+	})?;
 
-	const req = resolve(loop, "udp", addr,
-		service, &dial_udp_resolvecb, state)?;
-	state.req = req;
-	return ev::mkreq(&dial_udp_cancel, state);
+	match (resolve(loop, "udp", addr,
+		service, &dial_udp_resolvecb, state)) {
+	case let req: ev::req =>
+		state.req = req;
+		return ev::mkreq(&dial_udp_cancel, state);
+	case let e: error =>
+		free(state);
+		return e;
+	};
 };
 
 fn dial_udp_resolvecb(
