@@ -21,6 +21,7 @@ export type op = enum u64 {
 	RECVFROM     = 9 << 16,
 	SEND         = 10 << 16,
 	RECV         = 11 << 16,
+	WAIT         = 12 << 16,
 };
 
 export type fflags = enum uint {
@@ -197,6 +198,8 @@ fn file_epoll_ctl(file: *file) void = {
 	case op::SEND, op::SENDTO =>
 		events |= rt::EPOLLOUT;
 	case op::RECV, op::RECVFROM =>
+		events |= rt::EPOLLIN;
+	case op::WAIT =>
 		events |= rt::EPOLLIN;
 	case =>
 		yield;

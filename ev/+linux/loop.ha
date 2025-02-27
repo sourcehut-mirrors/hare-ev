@@ -196,6 +196,8 @@ export fn dispatch(
 			send_ready(file, ev);
 		case op::RECV =>
 			recv_ready(file, ev);
+		case op::WAIT =>
+			wait_ready(file, ev);
 		case =>
 			assert(pending & ~(op::READV | op::WRITEV) == 0);
 		};
