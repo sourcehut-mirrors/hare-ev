@@ -11,7 +11,7 @@ export fn main() void = {
 
 	const cmd = exec::cmd(os::args[1], os::args[2..]...)!;
 	const child = ev::exec(&loop, &cmd)!;
-	ev::wait(child, &child_exited);
+	ev::wait(child, &child_exited)!;
 
 	const timer = ev::newtimer(&loop, &expired, time::clock::MONOTONIC)!;
 	ev::timer_configure(timer, 5 * time::SECOND, 0);
@@ -26,14 +26,9 @@ fn expired(timer: *ev::file) void = {
 	ev::kill(child)!;
 };
 
-fn child_exited(child: *ev::file, r: (exec::status | errors::error)) void = {
-	match (r) {
-	case let st: exec::status =>
-		const exit = exec::exit(&st);
-		fmt::printfln("child exited: {}", exec::exitstr(exit))!;
-	case let err: errors::error =>
-		fmt::printfln("ev::wait: {}", errors::strerror(err))!;
-	};
+fn child_exited(child: *ev::file, r: exec::status) void = {
+	const exit = exec::exit(&r);
+	fmt::printfln("child exited: {}", exec::exitstr(exit))!;
 
 	const loop = ev::getloop(child);
 	ev::stop(loop);
