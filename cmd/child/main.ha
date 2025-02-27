@@ -11,7 +11,7 @@ export fn main() void = {
 
 	const cmd = exec::cmd(os::args[1], os::args[2..]...)!;
 	const child = ev::exec(&loop, &cmd)!;
-	ev::wait(child, &child_exited)!;
+	ev::wait(child, &child_exited);
 
 	const timer = ev::newtimer(&loop, &expired, time::clock::MONOTONIC)!;
 	ev::timer_configure(timer, 5 * time::SECOND, 0);

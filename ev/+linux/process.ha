@@ -37,17 +37,14 @@ export type waitcb = fn(file: *file, result: exec::status) void;
 
 // Waits for a process to exit. After the callback is run, the [[file]] is
 // closed and unregistered from the event loop and may not be used again.
-export fn wait(proc: *file, cb: *waitcb) (req | errors::error) = {
+export fn wait(proc: *file, cb: *waitcb) req = {
 	assert(proc.op & op::WAIT == 0);
 
 	// Attempt to waitid now to hit error cases early
 	match (do_waitid(proc, cb, rt::WNOHANG)) {
 	case let err: rt::errno =>
-		// We expect EAGAIN, anything else indicates that something went
-		// wrong (e.g. EBADF if using a non-pidfd with ev::wait)
-		if (err != rt::EAGAIN) {
-			return errors::errno(err);
-		};
+		assert(err == rt::EAGAIN,
+			"ev::wait: unexpected error from waitid (not a pidfd?)");
 	case void =>
 		// Child has already exited. do_waitid ran the callback, so we
 		// can return with no further fanfare
