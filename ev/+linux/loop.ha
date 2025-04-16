@@ -108,7 +108,7 @@ fn do_cancel(req: *req) void = {
 // Returns false if the loop has been stopped via [[stop]], or true otherwise.
 export fn dispatch(
 	loop: *loop,
-	timeout: time::duration,
+	timeout: time::duration = -1,
 ) (bool | errors::error) = {
 	const millis: int = if (timeout == -1) {
 		yield -1;
