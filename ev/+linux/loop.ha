@@ -129,7 +129,7 @@ export fn dispatch(
 	};
 	free(todo);
 
-	if (len(loop.events) == 0) {
+	if (len(loop.events) == 0 || loop.stop) {
 		return true;
 	};
 
