@@ -110,7 +110,7 @@ fn resolve_dns(
 	loop: *ev::loop,
 	addr: str,
 ) (ev::req | error) = {
-	const domain = dns::parse_domain(addr);
+	const domain = dns::parse_domain(addr)?;
 	defer free(domain);
 
 	let rand: []u8 = [0, 0];

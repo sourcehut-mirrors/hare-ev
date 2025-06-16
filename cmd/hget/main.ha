@@ -60,7 +60,7 @@ fn dialcb(user: nullable *opaque, r: (*ev::file | dial::error)) void = {
 			yield s;
 		case let ip: ip::addr =>
 			yield ip::string(ip);
-		});
+		})!;
 
 	ev::write(file, &writecb, state.buf[..len(s)]);
 };
