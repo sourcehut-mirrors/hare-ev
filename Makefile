@@ -28,6 +28,7 @@ install:
 	mkdir -p $(DESTDIR)$(THIRDPARTYDIR)/ev/+linux
 	mkdir -p $(DESTDIR)$(THIRDPARTYDIR)/ev/dial
 	mkdir -p $(DESTDIR)$(THIRDPARTYDIR)/ev/dns
+	install -m644 ev/README $(DESTDIR)$(THIRDPARTYDIR)/ev/
 	install -m644 ev/+linux/*.ha $(DESTDIR)$(THIRDPARTYDIR)/ev/+linux
 	install -m644 ev/dial/*.ha $(DESTDIR)$(THIRDPARTYDIR)/ev/dial
 	install -m644 ev/dns/*.ha $(DESTDIR)$(THIRDPARTYDIR)/ev/dns
