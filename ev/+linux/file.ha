@@ -26,6 +26,7 @@ export type op = enum u64 {
 
 export type fflags = enum uint {
 	NONE = 0,
+	PAUSED = 1 << 30,
 	BLOCKING = 1 << 31,
 };
 
@@ -60,47 +61,11 @@ export type file = struct {
 	},
 };
 
-// Registers a file descriptor with an event loop.
-export fn register(
-	loop: *loop,
-	fd: io::file,
-	user: nullable *opaque = null,
-) (*file | errors::error | nomem) = {
-	const file = alloc(file {
-		flags = fflags::NONE,
-		fd = fd,
-		ev = loop,
-		op = op::NONE,
-		user = user,
-		...
-	})?;
+// Pauses a file object such that the loop will not listen to any events of
+// the object. Use [[resume]] to enable events for this file object again.
+export fn pause(file: *file) void = {
+	assert(file.flags & fflags::PAUSED == 0);
 
-	let ev = rt::epoll_event {
-		events = 0,
-		data = rt::epoll_data {
-			fd = 0,
-		}
-	};
-	ev.data.ptr = file;
-	match (rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_ADD, fd, &ev)) {
-	case void =>
-		yield;
-	case let err: rt::errno =>
-		if (err == rt::EPERM) {
-			// epoll(2) does not support regular files, use blocking
-			// I/O instead
-			file.flags = fflags::BLOCKING;
-			return file;
-		};
-		return errors::errno(err);
-	};
-
-	return file;
-};
-
-// Unregisters a file object with an event loop and frees resources associated
-// with it. Does not close the underlying file descriptor.
-export fn unregister(file: *file) void = {
 	const loop = file.ev;
 	if (file.flags & fflags::BLOCKING == 0) {
 		// The only way that this could fail is in the event of a
@@ -108,9 +73,6 @@ export fn unregister(file: *file) void = {
 		// custom [[file]] which was never registered, so assert on
 		// error.
 		rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
-	};
-	if (file.op == op::SIGNAL) {
-		signal_restore(file);
 	};
 
 	for (let ev &.. loop.events) {
@@ -122,6 +84,67 @@ export fn unregister(file: *file) void = {
 		ev.data.fd = 0;
 		break;
 	};
+
+	file.flags |= fflags::PAUSED;
+};
+
+// Continues to listen for events on the 'file' object.
+export fn resume(file: *file) (void | errors::error) = {
+	assert(file.flags & fflags::PAUSED == fflags::PAUSED);
+
+	if (file.flags & fflags::BLOCKING != 0) {
+		file.flags &= ~fflags::PAUSED;
+		return;
+	};
+
+	let fd = file.fd;
+	let ev = rt::epoll_event {
+		events = 0,
+		data = rt::epoll_data {
+			fd = 0,
+			ptr = file,
+		}
+	};
+	match (rt::epoll_ctl(file.ev.fd, rt::EPOLL_CTL_ADD, fd, &ev)) {
+	case void =>
+		yield;
+	case let err: rt::errno =>
+		if (err != rt::EPERM) {
+			return errors::errno(err);
+		};
+		// epoll(2) does not support regular files, use blocking
+		// I/O instead
+		file.flags = fflags::BLOCKING;
+	};
+
+	file.flags &= ~fflags::PAUSED;
+};
+
+// Registers a file descriptor with an event loop.
+export fn register(
+	loop: *loop,
+	fd: io::file,
+	user: nullable *opaque = null,
+) (*file | errors::error | nomem) = {
+	const file = alloc(file {
+		flags = fflags::PAUSED,
+		fd = fd,
+		ev = loop,
+		op = op::NONE,
+		user = user,
+		...
+	})?;
+	resume(file)?;
+	return file;
+};
+
+// Unregisters a file object with an event loop and frees resources associated
+// with it. Does not close the underlying file descriptor.
+export fn unregister(file: *file) void = {
+	pause(file);
+	if (file.op == op::SIGNAL) {
+		signal_restore(file);
+	};
 	free(file);
 };
 
@@ -129,7 +152,13 @@ export fn unregister(file: *file) void = {
 // it, and closes the underlying file descriptor.
 export fn close(file: *file) void = {
 	const fd = file.fd;
-	unregister(file);
+	if (file.flags & fflags::PAUSED == 0) {
+		pause(file);
+	};
+	if (file.op == op::SIGNAL) {
+		signal_restore(file);
+	};
+	free(file);
 	io::close(fd)!;
 };
 
