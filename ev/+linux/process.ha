@@ -9,7 +9,7 @@ use unix::signal::{sig, code};
 export fn exec(
 	loop: *loop,
 	cmd: *exec::command,
-) (*file | errors::error | nomem) = {
+) (*file | exec::error | nomem) = {
 	let pidfd: int = 0;
 	let args = rt::clone_args {
 		flags = rt::CLONE_PIDFD,
@@ -26,10 +26,17 @@ export fn exec(
 	};
 
 	if (pid == 0) {
-		exec::exec(cmd);
+		return exec::exec(cmd);
 	};
 
-	return register(loop, pidfd);
+	match (register(loop, pidfd)) {
+	case let f: *file =>
+		return f;
+	case let e: errors::error =>
+		return e;
+	case nomem =>
+		return nomem;
+	};
 };
 
 // A callback for a [[wait]] operation.
