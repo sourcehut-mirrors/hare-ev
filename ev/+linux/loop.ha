@@ -81,7 +81,7 @@ export fn do(
 		loop = loop,
 	})?;
 	append(loop.dispatch, dispatch)?;
-	return mkreq(&do_cancel, dispatch);
+	return mkreq(null, &do_cancel, dispatch);
 };
 
 fn do_cancel(req: *req) void = {

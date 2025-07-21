@@ -61,7 +61,7 @@ export fn wait(proc: *file, cb: *waitcb) req = {
 	proc.op |= op::WAIT;
 	proc.cb = cb;
 	file_epoll_ctl(proc);
-	return mkreq(&wait_cancel, proc);
+	return mkreq(proc, &wait_cancel);
 };
 
 // Calls [[rt::waitid]] with the given options. If successful, calls the

@@ -37,19 +37,16 @@ export type file = struct {
 	flags: fflags,
 	op: op,
 	cb: nullable *opaque,
-	cb2: nullable *opaque,
 	user: nullable *opaque,
 
 	prio: int,
 
+	// In-flight request lists
+	readv: req_list,
+	writev: req_list,
+
 	// Operation-specific data
 	union {
-		struct {
-			rvbuf: io::vector,
-			rvec: []io::vector,
-			wvbuf: io::vector,
-			wvec: []io::vector,
-		},
 		sockflag: net::sockflag,
 		sigmask: signal::sigset,
 		sendrecv: struct {
@@ -59,6 +56,36 @@ export type file = struct {
 			port: u16,
 		},
 	},
+};
+
+// Initializes a file [[req]]est.
+fn file_req_init(req: *req, cancel: *cancelfn) *file = {
+	const file = match (req.file) {
+	case let f: *file =>
+		yield f;
+	case null =>
+		abort("Uninitialized file request, use e.g. ev::ioreq_init first");
+	};
+	req.cancel = cancel;
+	return file;
+};
+
+// Finishes a file [[req]]uest which has been completed or cancelled.
+fn file_req_finish(req: *req, list: *req_list) void = {
+	const file = req.file as *file;
+	req_unlink(list, &req.link);
+	req.cancel = null;
+};
+
+fn file_get_request(head: *req_list) *req = {
+	const tail = match (head.tail) {
+	case let req: *req_list =>
+		yield req;
+	case null =>
+		abort("Invalid request list");
+	};
+	const offs = offset((null: *req).link): uintptr;
+	return (tail: uintptr - offs): *req;
 };
 
 // Pauses a file object such that the loop will not listen to any events of

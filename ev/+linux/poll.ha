@@ -18,7 +18,7 @@ export fn readable(
 	file.op |= op::READABLE;
 	file.cb = cb;
 	file_epoll_ctl(file);
-	return mkreq(&readable_cancel, file);
+	return mkreq(file, &readable_cancel);
 };
 
 fn readable_ready(file: *file, ev: *rt::epoll_event) void = {
@@ -55,7 +55,7 @@ export fn writable(
 	file.op |= op::WRITABLE;
 	file.cb = cb;
 	file_epoll_ctl(file);
-	return mkreq(&writable_cancel, file);
+	return mkreq(file, &writable_cancel);
 };
 
 fn writable_ready(file: *file, ev: *rt::epoll_event) void = {

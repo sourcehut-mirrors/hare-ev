@@ -113,7 +113,7 @@ export fn query(
 	state.r4 = ev::recvfrom(socket4, &qrecvcb, state.rbuf);
 	state.r6 = ev::recvfrom(socket6, &qrecvcb, state.rbuf);
 	stateok = true;
-	return ev::mkreq(&query_cancel, state);
+	return ev::mkreq(null, &query_cancel, state);
 };
 
 fn query_cancel(req: *ev::req) void = {

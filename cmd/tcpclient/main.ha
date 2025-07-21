@@ -14,6 +14,8 @@ type state = struct {
 	stdbuf: [os::BUFSZ]u8,
 	netbuf: [os::BUFSZ]u8,
 	wbuf: []u8,
+	read: ev::ioreq,
+	write: ev::ioreq,
 };
 
 export fn main() void = {
@@ -25,6 +27,8 @@ export fn main() void = {
 		stdin = ev::register(&loop, os::stdin_file)!,
 		stdout = ev::register(&loop, os::stdout_file)!,
 		sock = null: *ev::file, // populated by [[connected]]
+		read = ev::IOREQ_INIT,
+		write = ev::IOREQ_INIT,
 		...
 	};
 	ev::setuser(state.stdin, &state);
@@ -53,8 +57,11 @@ fn connected(result: (*ev::file | net::error), user: nullable *opaque) void = {
 	ev::setuser(sock, state);
 	state.sock = sock;
 
-	ev::read(state.sock, &sock_read, state.netbuf);
 	ev::readable(state.stdin, &stdin_readable);
+
+	state.read = ev::ioreq_init(state.sock, state);
+	state.write = ev::ioreq_init(state.sock, state);
+	ev::read(&state.read, state.netbuf, &sock_read);
 };
 
 fn stdin_readable(file: *ev::file) void = {
@@ -71,11 +78,16 @@ fn stdin_readable(file: *ev::file) void = {
 		return;
 	};
 	state.wbuf = state.stdbuf[..n];
-	ev::write(state.sock, &sock_write, state.wbuf);
+
+	ev::write(&state.write, state.wbuf, &sock_write);
 };
 
-fn sock_read(file: *ev::file, r: (size | io::EOF | io::error)) void = {
-	const state = ev::getuser(file): *state;
+fn sock_read(
+	req: *ev::req,
+	r: (size | io::EOF | io::error),
+	user: nullable *opaque,
+) void = {
+	const state = user: *state;
 	const n = match (r) {
 	case let n: size =>
 		yield n;
@@ -88,11 +100,15 @@ fn sock_read(file: *ev::file, r: (size | io::EOF | io::error)) void = {
 		return;
 	};
 	io::write(os::stdout_file, state.netbuf[..n])!;
-	ev::read(state.sock, &sock_read, state.netbuf);
+	ev::read(&state.read, state.netbuf, &sock_read);
 };
 
-fn sock_write(file: *ev::file, r: (size | io::error)) void = {
-	const state = ev::getuser(file): *state;
+fn sock_write(
+	req: *ev::req,
+	r: (size | io::error),
+	user: nullable *opaque,
+) void = {
+	const state = user: *state;
 	const n = match (r) {
 	case let n: size =>
 		yield n;
@@ -103,7 +119,7 @@ fn sock_write(file: *ev::file, r: (size | io::error)) void = {
 	};
 	static delete(state.wbuf[..n]);
 	if (len(state.wbuf) != 0) {
-		ev::write(state.sock, &sock_write, state.wbuf);
+		ev::write(&state.write, state.wbuf, &sock_write);
 	} else {
 		ev::readable(state.stdin, &stdin_readable);
 	};

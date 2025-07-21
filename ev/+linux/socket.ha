@@ -100,7 +100,7 @@ export fn connect_tcp(
 	file.cb = cb;
 	file.op = op::CONNECT_TCP;
 	file_epoll_ctl(file);
-	return mkreq(&connect_tcp_cancel, file);
+	return mkreq(file, &connect_tcp_cancel);
 };
 
 // Connects to a UNIX domain socket.
@@ -146,7 +146,7 @@ export fn connect_unix(
 	file.cb = cb;
 	file.op = op::CONNECT_UNIX;
 	file_epoll_ctl(file);
-	return mkreq(&connect_unix_cancel, file);
+	return mkreq(file, &connect_unix_cancel);
 };
 
 fn connect_tcp_ready(
@@ -231,7 +231,7 @@ export fn accept(
 	sock.cb = cb;
 	sock.sockflag = fl;
 	file_epoll_ctl(sock);
-	return mkreq(&accept_cancel, sock);
+	return mkreq(sock, &accept_cancel);
 };
 
 fn accept_ready(
@@ -284,7 +284,7 @@ export fn recvfrom(
 	sock.cb = cb;
 	sock.sendrecv.rbuf = buf;
 	file_epoll_ctl(sock);
-	return mkreq(&recvfrom_cancel, sock);
+	return mkreq(sock, &recvfrom_cancel);
 };
 
 fn recvfrom_ready(
@@ -327,7 +327,7 @@ export fn recv(
 	sock.cb = cb;
 	sock.sendrecv.rbuf = buf;
 	file_epoll_ctl(sock);
-	return mkreq(&recv_cancel, sock);
+	return mkreq(sock, &recv_cancel);
 };
 
 fn recv_ready(
@@ -365,7 +365,7 @@ export fn send(
 	sock.cb = cb;
 	sock.sendrecv.sbuf = buf;
 	file_epoll_ctl(sock);
-	return mkreq(&send_cancel, sock);
+	return mkreq(sock, &send_cancel);
 };
 
 fn send_ready(
@@ -404,7 +404,7 @@ export fn sendto(
 	sock.sendrecv.dest = dest;
 	sock.sendrecv.port = port;
 	file_epoll_ctl(sock);
-	return mkreq(&sendto_cancel, sock);
+	return mkreq(sock, &sendto_cancel);
 };
 
 fn sendto_ready(

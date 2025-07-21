@@ -41,7 +41,7 @@ fn dial_tcp(
 		service, &dial_tcp_resolvecb, state)) {
 	case let req: ev::req =>
 		state.req = req;
-		return ev::mkreq(&dial_tcp_cancel, state);
+		return ev::mkreq(null, &dial_tcp_cancel, state);
 	case let e: error =>
 		free(state);
 		return e;
@@ -146,7 +146,7 @@ fn dial_udp(
 		service, &dial_udp_resolvecb, state)) {
 	case let req: ev::req =>
 		state.req = req;
-		return ev::mkreq(&dial_udp_cancel, state);
+		return ev::mkreq(null, &dial_udp_cancel, state);
 	case let e: error =>
 		free(state);
 		return e;

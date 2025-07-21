@@ -165,7 +165,7 @@ fn resolve_dns(
 	defer if(!ok) ev::cancel(&state.r6);
 	state.r4 = edns::query(loop, &query4, &query_cb_v4, state)?;
 	ok = true;
-	return ev::mkreq(&resolve_cancel, state);
+	return ev::mkreq(null, &resolve_cancel, state);
 };
 
 fn resolve_finish(st: *resolve_state, r: (([]ip::addr, u16) | error)) void = {
