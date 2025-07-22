@@ -67,12 +67,15 @@ fn file_req_init(req: *req, cancel: *cancelfn) *file = {
 		abort("Uninitialized file request, use e.g. ev::ioreq_init first");
 	};
 	req.cancel = cancel;
+	file.ev.nrequest += 1;
 	return file;
 };
 
 // Finishes a file [[req]]uest which has been completed or cancelled.
 fn file_req_finish(req: *req, list: *req_list) void = {
 	const file = req.file as *file;
+	assert(file.ev.nrequest != 0);
+	file.ev.nrequest -= 1;
 	req_unlink(list, &req.link);
 	req.cancel = null;
 };

@@ -19,6 +19,7 @@ export type loop = struct {
 	fd: io::file,
 	events: []rt::epoll_event,
 	dispatch: []*ondispatch,
+	nrequest: uint,
 	stop: bool,
 };
 
@@ -44,6 +45,7 @@ export fn newloop(events: size = 256) (loop | nomem | errors::error) = {
 			}
 		}...], events)?,
 		dispatch = [],
+		nrequest = 0,
 		stop = false,
 	};
 };
