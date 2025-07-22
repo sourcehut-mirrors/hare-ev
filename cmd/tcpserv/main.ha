@@ -22,6 +22,7 @@ type client = struct {
 	port: u16,
 	buf: [os::BUFSZ]u8,
 	wbuf: []u8,
+	ioreq: ev::ioreq,
 };
 
 export fn main() void = {
@@ -43,8 +44,8 @@ export fn main() void = {
 		sock = sock,
 		...
 	};
-	ev::setuser(sock, &state);
-	ev::accept(sock, &server_accept);
+	let req = ev::accept_init(sock, &state);
+	ev::accept(&req, &server_accept);
 
 	const sig = ev::signal(&loop, &signal, signal::sig::INT, signal::sig::TERM)!;
 	defer ev::close(sig);
@@ -61,8 +62,12 @@ fn signal(file: *ev::file, sig: signal::sig) void = {
 	ev::stop(server.loop);
 };
 
-fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
-	let server = ev::getuser(sock): *server;
+fn server_accept(
+	req: *ev::sockreq,
+	r: (*ev::file | net::error),
+	user: nullable *opaque,
+) void = {
+	let server = user: *server;
 	const sock = match (r) {
 	case let sock: *ev::file =>
 		yield sock;
@@ -81,16 +86,23 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 		sock = sock,
 		addr = addr,
 		port = port,
+		ioreq = ev::ioreq_init(sock),
 		...
 	})!;
 	append(server.clients, client)!;
-	ev::setuser(client.sock, client);
-	ev::read(client.sock, &client_read, client.buf);
-	ev::accept(server.sock, &server_accept);
+
+	ev::req_setuser(&client.ioreq, client);
+	ev::read(&client.ioreq, client.buf, &client_read);
+
+	ev::accept(req, &server_accept);
 };
 
-fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
-	const client = ev::getuser(sock): *client;
+fn client_read(
+	req: *ev::ioreq,
+	r: (size | io::EOF | io::error),
+	user: nullable *opaque,
+) void = {
+	const client = user: *client;
 	const n = match (r) {
 	case let err: io::error =>
 		log::printfln("{}:{}: Error: read: {}",
@@ -105,11 +117,15 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 		yield n;
 	};
 	client.wbuf = client.buf[..n];
-	ev::write(client.sock, &client_write, client.wbuf);
+	ev::write(req, client.wbuf, &client_write);
 };
 
-fn client_write(sock: *ev::file, r: (size | io::error)) void = {
-	const client = ev::getuser(sock): *client;
+fn client_write(
+	req: *ev::ioreq,
+	r: (size | io::error),
+	user: nullable *opaque,
+) void = {
+	const client = user: *client;
 	const n = match (r) {
 	case let err: io::error =>
 		log::printfln("{}:{}: Error: write: {}",
@@ -120,11 +136,13 @@ fn client_write(sock: *ev::file, r: (size | io::error)) void = {
 	case let n: size =>
 		yield n;
 	};
+
 	static delete(client.wbuf[..n]);
+
 	if (len(client.wbuf) != 0) {
-		ev::write(client.sock, &client_write, client.wbuf);
+		ev::write(req, client.wbuf, &client_write);
 	} else {
-		ev::read(client.sock, &client_read, client.buf);
+		ev::read(req, client.buf, &client_read);
 	};
 };
 
@@ -138,6 +156,7 @@ fn client_close(client: *client) void = {
 	};
 	log::printfln("{}:{}: Connection closed",
 		ip::string(client.addr), client.port);
+	ev::cancel(&client.ioreq);
 	ev::close(client.sock);
 	free(client);
 };
