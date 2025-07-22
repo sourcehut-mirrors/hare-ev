@@ -42,6 +42,7 @@ fn loop_req_finish(req: *req) void = {
 	assert(file.ev.nrequest != 0);
 	file.ev.nrequest -= 1;
 	req.cancel = null;
+	req.loop = file.ev;
 };
 
 // Creates a new event loop. The user must pass the return value to [[finish]]
