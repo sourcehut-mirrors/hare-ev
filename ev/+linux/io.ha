@@ -3,14 +3,14 @@ use rt;
 
 // A callback for a [[read]] or [[readv]] operation.
 export type readcb = fn(
-	req: *req,
+	req: *ioreq,
 	result: (size | io::EOF | io::error),
 	user: nullable *opaque,
 ) void;
 
 // A callback for a [[write]] or [[writev]] operation.
 export type writecb = fn(
-	req: *req,
+	req: *ioreq,
 	result: (size | io::error),
 	user: nullable *opaque,
 ) void;
@@ -40,6 +40,9 @@ export def IOREQ_INIT = ioreq {
 // pointer. A single I/O request object may be re-used after it is completed or
 // [[cancel]]led, with the same file and user data, or it can be reinitialized
 // with a different file and/or user data.
+//
+// Once submitted to the event loop, a request object is borrowed from the
+// caller and must remain stable until the request is cancelled or completed.
 export fn ioreq_init(
 	file: *file,
 	user: nullable *opaque = null,

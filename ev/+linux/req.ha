@@ -1,5 +1,8 @@
 export type req = struct {
-	file: nullable *file,
+	union {
+		file: nullable *file,
+		loop: nullable *loop,
+	},
 	cancel: nullable *cancelfn,
 	user: nullable *opaque,
 	link: req_list,
@@ -19,6 +22,11 @@ export type req_list = struct {
 // Returns the [[file]] associated with a [[req]]uest, if any.
 export fn req_getfile(req: *req) nullable *file = {
 	return req.file;
+};
+
+// Returns the [[loop]] associated with a [[req]]uest, if any.
+export fn req_getloop(req: *req) nullable *loop = {
+	return req.loop;
 };
 
 // Returns the user data associated with a [[req]]uest, if any.

@@ -44,6 +44,8 @@ export type file = struct {
 	// In-flight request lists
 	readv: req_list,
 	writev: req_list,
+	accept: req_list,
+	connect: nullable *sockreq, // only one at a time
 
 	// Operation-specific data
 	union {

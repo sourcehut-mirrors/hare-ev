@@ -34,7 +34,8 @@ export fn main() void = {
 	ev::setuser(state.stdin, &state);
 	ev::setuser(state.stdout, &state);
 
-	match (ev::connect_tcp(&loop, &connected, ip::LOCAL_V4, 12345, &state)) {
+	const req = ev::connect_init(&loop, &state);
+	match (ev::connect_tcp(&req, ip::LOCAL_V4, 12345, &connected)) {
 	case let err: net::error =>
 		fmt::fatal("Error: connect:", net::strerror(err));
 	case let err: errors::error =>
@@ -46,7 +47,11 @@ export fn main() void = {
 	for (ev::dispatch(&loop, -1)!) void;
 };
 
-fn connected(result: (*ev::file | net::error), user: nullable *opaque) void = {
+fn connected(
+	req: *ev::sockreq,
+	result: (*ev::file | net::error),
+	user: nullable *opaque,
+) void = {
 	const state = user: *state;
 	const sock = match (result) {
 	case let err: net::error =>
@@ -83,7 +88,7 @@ fn stdin_readable(file: *ev::file) void = {
 };
 
 fn sock_read(
-	req: *ev::req,
+	req: *ev::ioreq,
 	r: (size | io::EOF | io::error),
 	user: nullable *opaque,
 ) void = {
@@ -104,7 +109,7 @@ fn sock_read(
 };
 
 fn sock_write(
-	req: *ev::req,
+	req: *ev::ioreq,
 	r: (size | io::error),
 	user: nullable *opaque,
 ) void = {
