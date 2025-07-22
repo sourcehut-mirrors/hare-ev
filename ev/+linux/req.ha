@@ -1,4 +1,6 @@
 export type req = struct {
+	// TODO: This is a footgun:
+	// We should probably put the request type into this struct
 	union {
 		file: nullable *file,
 		loop: nullable *loop,
