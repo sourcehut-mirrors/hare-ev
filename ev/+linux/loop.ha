@@ -229,6 +229,16 @@ export fn dispatch(
 	return !loop.stop;
 };
 
+// Runs the event loop (via [[dispatch]]) until all in-flight requests have been
+// processed, or [[stop]] is called, then returns.
+export fn run(loop: *loop) (void | errors::error) = {
+	for (loop.nrequest != 0) {
+		if (!dispatch(loop, -1)?) {
+			break;
+		};
+	};
+};
+
 // Signals the loop to stop processing events. If called during a callback, it
 // will cause that invocation of [[dispatch]] to return false. Otherwise, false
 // will be returned only upon the next call to [[dispatch]].

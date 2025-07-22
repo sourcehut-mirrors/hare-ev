@@ -52,7 +52,7 @@ export fn main() void = {
 	ev::setuser(sig, &state);
 
 	log::println("Listening on 127.0.0.1:12345");
-	for (ev::dispatch(&loop, -1)!) void;
+	ev::run(&loop)!;
 	os::exit(state.exit);
 };
 

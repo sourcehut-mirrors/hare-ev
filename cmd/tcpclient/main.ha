@@ -44,7 +44,7 @@ export fn main() void = {
 		yield;
 	};
 
-	for (ev::dispatch(&loop, -1)!) void;
+	ev::run(&loop)!;
 };
 
 fn connected(
@@ -97,7 +97,6 @@ fn sock_read(
 	case let n: size =>
 		yield n;
 	case io::EOF =>
-		ev::stop(state.loop);
 		return;
 	case let err: io::error =>
 		fmt::errorln("Error: read:", io::strerror(err))!;
