@@ -58,10 +58,7 @@ export type file = struct {
 	sendto: req_list,
 
 	// Operation-specific data
-	union {
-		sockflag: net::sockflag,
-		sigmask: signal::sigset,
-	},
+	sigmask: signal::sigset,
 };
 
 // Initializes a file [[req]]est.

@@ -22,6 +22,7 @@ export type acceptcb = fn(
 
 export type sockreq = struct {
 	req,
+	flags: net::sockflag,
 	union {
 		connectcb: nullable *connectcb,
 		acceptcb: nullable *acceptcb,
@@ -31,7 +32,10 @@ export type sockreq = struct {
 // An uninitialized [[sockreq]] value. This can be used to statically initialize
 // [[sockreq]] objects when [[connect_init]] or [[accept_init]] is not
 // applicable, for instance when storing a [[sockreq]] in a global.
-export def SOCKREQ_INIT = sockreq { ... };
+export def SOCKREQ_INIT = sockreq {
+	flags = 0,
+	...
+};
 
 // Initializes a [[sockreq]] for use with [[connect_tcp]] et al.
 //
@@ -47,6 +51,7 @@ export fn connect_init(loop: *loop, user: nullable *opaque = null) sockreq = {
 	return sockreq {
 		loop = loop,
 		user = user,
+		flags = 0,
 		...
 	};
 };
@@ -64,6 +69,7 @@ export fn accept_init(socket: *file, user: nullable *opaque = null) sockreq = {
 	return sockreq {
 		file = socket,
 		user = user,
+		flags = 0,
 		...
 	};
 };
@@ -244,6 +250,7 @@ export fn accept(
 	flags: net::sockflag = 0,
 ) void = {
 	const file = file_req_init(req, &accept_cancel);
+	req.flags = flags;
 	req.acceptcb = cb;
 
 	file.op |= op::ACCEPT;
@@ -261,7 +268,7 @@ fn accept_ready(
 	file_req_finish(req, &sock.accept);
 
 	const cb = req.acceptcb as *acceptcb;
-	const r = tcp::accept(sock.fd, sock.sockflag);
+	const r = tcp::accept(sock.fd, req.flags);
 	match (r) {
 	case let fd: net::socket =>
 		// TODO: Bubble up errors from here?
