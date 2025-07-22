@@ -9,6 +9,10 @@ export type op = enum u64 {
 	NONE     = 0,
 	READV    = 1 << 0,
 	WRITEV   = 1 << 1,
+	SENDTO   = 1 << 2,
+	RECVFROM = 1 << 3,
+	SEND     = 1 << 4,
+	RECV     = 1 << 5,
 
 	READABLE     = 1 << 16,
 	WRITABLE     = 2 << 16,
@@ -17,10 +21,6 @@ export type op = enum u64 {
 	CONNECT_UNIX = 5 << 16,
 	SIGNAL       = 6 << 16,
 	TIMER        = 7 << 16,
-	SENDTO       = 8 << 16,
-	RECVFROM     = 9 << 16,
-	SEND         = 10 << 16,
-	RECV         = 11 << 16,
 	WAIT         = 12 << 16,
 };
 
@@ -42,21 +42,25 @@ export type file = struct {
 	prio: int,
 
 	// In-flight request lists
+	//
+	// XXX: Not all of these are straightforwardly compatible, perhaps we
+	// can deduplicate them. It doesn't make sense to have read and recv in
+	// flight on the same file at once. In any case they aren't
+	// distinguishable on our end so it will almost certainly cause
+	// problems when the events come in.
 	readv: req_list,
 	writev: req_list,
-	accept: req_list,
 	connect: nullable *sockreq, // only one at a time
+	accept: req_list,
+	recv: req_list,
+	recvfrom: req_list,
+	send: req_list,
+	sendto: req_list,
 
 	// Operation-specific data
 	union {
 		sockflag: net::sockflag,
 		sigmask: signal::sigset,
-		sendrecv: struct {
-			sbuf: []u8,
-			rbuf: []u8,
-			dest: ip::addr,
-			port: u16,
-		},
 	},
 };
 
@@ -246,6 +250,13 @@ fn file_epoll_ctl(file: *file) void = {
 	if (file.op & op::WRITEV != 0 || file.op == op::WRITABLE) {
 		events |= rt::EPOLLOUT | rt::EPOLLHUP;
 	};
+	if (file.op & op::RECV != 0 || file.op & op::RECVFROM != 0) {
+		events |= rt::EPOLLIN;
+	};
+	if (file.op & op::SEND != 0 || file.op & op::SENDTO != 0) {
+		events |= rt::EPOLLOUT;
+	};
+
 	switch (file.op) {
 	case op::ACCEPT =>
 		events |= rt::EPOLLIN;
@@ -255,10 +266,6 @@ fn file_epoll_ctl(file: *file) void = {
 		events |= rt::EPOLLIN;
 	case op::TIMER =>
 		events &= ~rt::EPOLLONESHOT;
-		events |= rt::EPOLLIN;
-	case op::SEND, op::SENDTO =>
-		events |= rt::EPOLLOUT;
-	case op::RECV, op::RECVFROM =>
 		events |= rt::EPOLLIN;
 	case op::WAIT =>
 		events |= rt::EPOLLIN;

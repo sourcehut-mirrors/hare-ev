@@ -59,7 +59,7 @@ export fn ioreq_init(
 };
 
 // Returns the [[io::vector]]s associated with an [[ioreq]].
-export fn ioreq_buffer(req: *ioreq) []io::vector = {
+export fn ioreq_getvectors(req: *ioreq) []io::vector = {
 	return req.vec;
 };
 

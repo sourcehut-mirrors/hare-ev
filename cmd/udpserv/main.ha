@@ -7,8 +7,6 @@ use os;
 
 type state = struct {
 	loop: *ev::loop,
-	src: ip::addr,
-	port: u16,
 	buf: [os::BUFSZ]u8,
 	wbuf: []u8,
 };
@@ -29,18 +27,21 @@ export fn main() void = {
 
 	let state = state {
 		loop = &loop,
-		src = [0: u8, 0: u8, 0: u8, 0: u8],
 		...
 	};
-	ev::setuser(sock, &state);
-	ev::recvfrom(sock, &recv, state.buf);
+	let req = ev::dgramreq_init(sock, &state);
+	ev::recvfrom(&req, state.buf, &on_recv);
 
 	log::println("Listening on 127.0.0.1:12345");
-	for (ev::dispatch(&loop, -1)!) void;
+	ev::run(&loop)!;
 };
 
-fn recv(sock: *ev::file, r: ((size, ip::addr, u16) | net::error)) void = {
-	const state = ev::getuser(sock): *state;
+fn on_recv(
+	req: *ev::dgramreq,
+	r: ((size, ip::addr, u16) | net::error),
+	user: nullable *opaque,
+) void = {
+	const state = user: *state;
 	const (n, src, port) = match (r) {
 	case let err: net::error =>
 		log::println("Error: recv:", net::strerror(err));
@@ -50,18 +51,19 @@ fn recv(sock: *ev::file, r: ((size, ip::addr, u16) | net::error)) void = {
 		yield packet;
 	};
 
-	// TODO: Make ev send/write all data and drop these fields and the need
-	// to manually manage a write buffer and re-call sendto in &send
-	state.src = src;
-	state.port = port;
-
 	log::printfln("{} bytes from {}:{}", n, ip::string(src), port);
 	state.wbuf = state.buf[..n];
-	ev::sendto(sock, &send, state.wbuf, src, port);
+	ev::sendto(req, state.wbuf, src, port, &on_send_complete);
 };
 
-fn send(sock: *ev::file, r: (size | net::error)) void = {
-	const state = ev::getuser(sock): *state;
+fn on_send_complete(
+	req: *ev::dgramreq,
+	r: (size | net::error),
+	user: nullable *opaque,
+) void = {
+	const state = user: *state;
+	const (dest, port) = ev::dgramreq_getdest(req);
+
 	const n = match (r) {
 	case let err: net::error =>
 		log::println("Error: send:", net::strerror(err));
@@ -74,8 +76,8 @@ fn send(sock: *ev::file, r: (size | net::error)) void = {
 	static delete(state.wbuf[..n]);
 
 	if (len(state.wbuf) != 0) {
-		ev::sendto(sock, &send, state.wbuf, state.src, state.port);
+		ev::sendto(req, state.wbuf, dest, port, &on_send_complete);
 	} else {
-		ev::recvfrom(sock, &recv, state.buf);
+		ev::recvfrom(req, state.buf, &on_recv);
 	};
 };
