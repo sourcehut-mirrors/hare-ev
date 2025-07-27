@@ -50,12 +50,16 @@ export type file = struct {
 	// problems when the events come in.
 	readv: req_list,
 	writev: req_list,
-	connect: nullable *sockreq, // only one at a time
 	accept: req_list,
 	recv: req_list,
 	recvfrom: req_list,
 	send: req_list,
 	sendto: req_list,
+	// Serialized operations:
+	union {
+		connect: nullable *sockreq,
+		timer: nullable *timer,
+	},
 
 	// Operation-specific data
 	sigmask: signal::sigset,
