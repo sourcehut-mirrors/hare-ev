@@ -61,6 +61,7 @@ export type file = struct {
 	union {
 		connect: nullable *sockreq,
 		timer: nullable *timer,
+		wait: nullable *child,
 	},
 
 	// Operation-specific data
@@ -68,7 +69,7 @@ export type file = struct {
 };
 
 // Initializes a file [[req]]est.
-fn file_req_init(req: *req, cancel: *cancelfn) *file = {
+fn file_req_init(req: *req, cancel: nullable *cancelfn) *file = {
 	const file = match (req.file) {
 	case let f: *file =>
 		yield f;

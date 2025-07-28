@@ -15,7 +15,7 @@ export type timer = struct {
 
 // An uninitialized [[timer]] value. This can be used to statically
 // initialize [[timer]] objects when [[timer_init]] is not applicable, for
-// instance when storing an [[timer]] in a global.
+// instance when storing a [[timer]] in a global.
 export def TIMER_INIT = timer { ... };
 
 // Initializes a [[timer]] to run on the specified event [[loop]]. The timer is
