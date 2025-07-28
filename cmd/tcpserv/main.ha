@@ -47,18 +47,19 @@ export fn main() void = {
 	let req = ev::accept_init(sock, &state);
 	ev::accept(&req, &server_accept);
 
-	const sig = ev::signal(&loop, &signal, signal::sig::INT, signal::sig::TERM)!;
-	defer ev::close(sig);
-	ev::setuser(sig, &state);
+	const sig = ev::signal_init(&loop, &state,
+		signal::sig::INT, signal::sig::TERM)!;
+	defer ev::signal_finish(&sig);
+	ev::handle(&sig, &on_signal);
 
 	log::println("Listening on 127.0.0.1:12345");
 	ev::run(&loop)!;
 	os::exit(state.exit);
 };
 
-fn signal(file: *ev::file, sig: signal::sig) void = {
+fn on_signal(req: *ev::signal, sig: signal::sig, user: nullable *opaque) void = {
+	const server = user: *server;
 	log::printfln("Exiting due to {}", signal::signame(sig));
-	const server = ev::getuser(file): *server;
 	ev::stop(server.loop);
 };
 

@@ -33,13 +33,12 @@ export type fflags = enum uint {
 export type file = struct {
 	fd: io::file,
 	ev: *loop,
+	prio: int,
 
-	flags: fflags,
 	op: op,
+	flags: fflags,
 	cb: nullable *opaque,
 	user: nullable *opaque,
-
-	prio: int,
 
 	// In-flight request lists
 	//
@@ -62,10 +61,8 @@ export type file = struct {
 		connect: nullable *sockreq,
 		timer: nullable *timer,
 		wait: nullable *child,
+		signal: nullable *signal,
 	},
-
-	// Operation-specific data
-	sigmask: signal::sigset,
 };
 
 // Initializes a file [[req]]est.
@@ -182,9 +179,6 @@ export fn register(
 // with it. Does not close the underlying file descriptor.
 export fn unregister(file: *file) void = {
 	pause(file);
-	if (file.op == op::SIGNAL) {
-		signal_restore(file);
-	};
 	free(file);
 };
 
@@ -194,9 +188,6 @@ export fn close(file: *file) void = {
 	const fd = file.fd;
 	if (file.flags & fflags::PAUSED == 0) {
 		pause(file);
-	};
-	if (file.op == op::SIGNAL) {
-		signal_restore(file);
 	};
 	free(file);
 	io::close(fd)!;
