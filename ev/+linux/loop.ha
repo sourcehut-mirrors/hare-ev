@@ -195,6 +195,24 @@ export fn dispatch(
 				&& file.op & op::WRITEV != 0) {
 			writev_ready(file, ev);
 		};
+
+		if (ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0
+				&& file.op & op::RECV != 0) {
+			recv_ready(file, ev);
+		};
+		if (ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0
+				&& file.op & op::RECVFROM != 0) {
+			recvfrom_ready(file, ev);
+		};
+		if (ev.events & (rt::EPOLLOUT | rt::EPOLLHUP) != 0
+				&& file.op & op::SEND != 0) {
+			send_ready(file, ev);
+		};
+		if (ev.events & (rt::EPOLLOUT | rt::EPOLLHUP) != 0
+				&& file.op & op::SENDTO != 0) {
+			sendto_ready(file, ev);
+		};
+
 		switch (pending) {
 		case op::NONE =>
 			abort("No operation pending for ready object");
@@ -212,18 +230,9 @@ export fn dispatch(
 			signal_ready(file, ev);
 		case op::TIMER =>
 			timer_ready(file, ev);
-		case op::SENDTO =>
-			sendto_ready(file, ev);
-		case op::RECVFROM =>
-			recvfrom_ready(file, ev);
-		case op::SEND =>
-			send_ready(file, ev);
-		case op::RECV =>
-			recv_ready(file, ev);
 		case op::WAIT =>
 			wait_ready(file, ev);
-		case =>
-			assert(pending & ~(op::READV | op::WRITEV) == 0);
+		case => void;
 		};
 	};
 

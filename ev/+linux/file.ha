@@ -55,6 +55,8 @@ export type file = struct {
 	recvfrom: req_list,
 	send: req_list,
 	sendto: req_list,
+	readable: req_list,
+	writable: req_list,
 	// Serialized operations:
 	union {
 		connect: nullable *sockreq,
