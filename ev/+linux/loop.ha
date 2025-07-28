@@ -20,7 +20,15 @@ export type loop = struct {
 	events: []rt::epoll_event,
 	dispatch: []*ondispatch,
 	nrequest: uint,
-	stop: bool,
+	flags: loop_flag,
+	closeq: nullable *file,
+};
+
+export type loop_flag = enum uint {
+	NONE = 0,
+
+	STOP     = 1 << 0,
+	DISPATCH = 1 << 1,
 };
 
 // Finishes a loop [[req]]uest which has been completed or cancelled.
@@ -55,7 +63,8 @@ export fn newloop(events: size = 256) (loop | nomem | errors::error) = {
 		}...], events)?,
 		dispatch = [],
 		nrequest = 0,
-		stop = false,
+		flags = loop_flag::NONE,
+		closeq = null,
 	};
 };
 
@@ -107,6 +116,16 @@ fn do_cancel(req: *req) void = {
 	free(dispatch);
 };
 
+fn close_files(loop: *loop) void = {
+	for (let cur = loop.closeq; cur != null) {
+		const file = cur: *file;
+		let next = file.close_link;
+		close(file);
+		cur = next;
+	};
+	loop.closeq = null;
+};
+
 // Dispatches the event loop, waiting for new events and calling their callbacks
 // as appropriate.
 //
@@ -128,8 +147,14 @@ export fn dispatch(
 	} else {
 		yield (timeout / time::MILLISECOND): int;
 	};
-	if (loop.stop) {
+	if (loop.flags & loop_flag::STOP != 0) {
 		return false;
+	};
+
+	loop.flags |= loop_flag::DISPATCH;
+	defer {
+		loop.flags &= ~loop_flag::DISPATCH;
+		close_files(loop);
 	};
 
 	let todo = loop.dispatch;
@@ -140,7 +165,7 @@ export fn dispatch(
 	};
 	free(todo);
 
-	if (len(loop.events) == 0 || loop.stop) {
+	if (len(loop.events) == 0 || loop.flags & loop_flag::STOP != 0) {
 		return true;
 	};
 
@@ -223,7 +248,7 @@ export fn dispatch(
 		};
 	};
 
-	return !loop.stop;
+	return loop.flags & loop_flag::STOP == 0;
 };
 
 // Runs the event loop (via [[dispatch]]) until all in-flight requests have been
@@ -240,5 +265,5 @@ export fn run(loop: *loop) (void | errors::error) = {
 // will cause that invocation of [[dispatch]] to return false. Otherwise, false
 // will be returned only upon the next call to [[dispatch]].
 export fn stop(loop: *loop) void = {
-	loop.stop = true;
+	loop.flags |= loop_flag::STOP;
 };

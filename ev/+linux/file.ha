@@ -62,6 +62,10 @@ export type file = struct {
 		wait: nullable *child,
 		signal: nullable *signal,
 	},
+
+	// Linked list of files to be closed, head is on [[loop]]
+	close_link: nullable *file,
+};
 };
 
 // Initializes a file [[req]]est.
@@ -183,7 +187,17 @@ export fn unregister(file: *file) void = {
 
 // Unregisters a file object with an event loop, frees resources associated with
 // it, and closes the underlying file descriptor.
+//
+// File closures requested during event callbacks are deferred until the end of
+// the current [[dispatch]] call.
 export fn close(file: *file) void = {
+	const loop = file.ev;
+	if (loop.flags & loop_flag::DISPATCH != 0) {
+		file.close_link = loop.closeq;
+		loop.closeq = file;
+		return;
+	};
+
 	const fd = file.fd;
 	if (file.flags & fflags::PAUSED == 0) {
 		pause(file);
