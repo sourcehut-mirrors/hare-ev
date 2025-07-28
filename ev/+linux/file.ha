@@ -37,7 +37,6 @@ export type file = struct {
 
 	op: op,
 	flags: fflags,
-	cb: nullable *opaque,
 	user: nullable *opaque,
 
 	// In-flight request lists
