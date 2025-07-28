@@ -1,7 +1,6 @@
 use errors;
 use rt;
 use unix::signal;
-use fmt; // XXX TEMP
 
 // Callback function for [[signal]] operations.
 export type signalcb = fn(
