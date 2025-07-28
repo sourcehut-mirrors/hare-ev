@@ -23,19 +23,6 @@ export type loop = struct {
 	stop: bool,
 };
 
-// Initializes a loop [[req]]est.
-fn loop_req_init(req: *req, cancel: *cancelfn) *loop = {
-	const loop = match (req.loop) {
-	case let l: *loop =>
-		yield l;
-	case null =>
-		abort("Uninitialized file request, use e.g. ev::ioreq_init first");
-	};
-	req.cancel = cancel;
-	loop.nrequest += 1;
-	return loop;
-};
-
 // Finishes a loop [[req]]uest which has been completed or cancelled.
 fn loop_req_finish(req: *req) void = {
 	const file = req.file as *file;

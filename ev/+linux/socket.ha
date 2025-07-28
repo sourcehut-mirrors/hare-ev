@@ -130,13 +130,12 @@ export fn connect_tcp(
 	cb: *connectcb,
 	opts: net::sockflag = 0,
 ) (void | net::error | errors::error | nomem) = {
-	const loop = loop_req_init(req, &connect_tcp_cancel);
+	const loop = req.loop as *loop;
 	const sock = tcp::connect(addr, port, opts | net::sockflag::NONBLOCK)?;
-
-	let file = register(loop, sock)?;
-	req.file = file;
+	req.file = register(loop, sock)?;
 	req.connectcb = cb;
 
+	let file = file_req_init(req, &connect_cancel);
 	file.op = op::CONNECT_TCP;
 	file_epoll_ctl(file);
 	file.connect = req;
@@ -161,8 +160,6 @@ fn connect_tcp_ready(
 		cb(req, errors::errno(errno), req.user);
 		close(sock);
 	} else {
-		// XXX: If the user puts NONBLOCK into the opts provided at
-		// [[connect_tcp]] we could try to preserve that here
 		const fl = rt::fcntl(sock.fd, rt::F_GETFL, void)!;
 		rt::fcntl(sock.fd, rt::F_SETFL, fl & ~rt::O_NONBLOCK)!;
 		cb(req, sock, req.user);
@@ -178,13 +175,12 @@ export fn connect_unix(
 	cb: *connectcb,
 	opts: net::sockflag = 0,
 ) (void | net::error | errors::error | nomem) = {
-	const loop = loop_req_init(req, &connect_tcp_cancel);
+	const loop = req.loop as *loop;
 	const sock = unix::connect(addr, opts | net::sockflag::NONBLOCK)?;
-
-	let file = register(loop, sock)?;
-	req.file = file;
+	req.file = register(loop, sock)?;
 	req.connectcb = cb;
 
+	let file = file_req_init(req, &connect_cancel);
 	file.op = op::CONNECT_UNIX;
 	file_epoll_ctl(file);
 	file.connect = req;
@@ -209,35 +205,16 @@ fn connect_unix_ready(
 		cb(req, errors::errno(errno), req.user);
 		close(sock);
 	} else {
-		// XXX: If the user puts NONBLOCK into the opts provided at
-		// [[connect_unix]] we could try to preserve that here
 		const fl = rt::fcntl(sock.fd, rt::F_GETFL, void)!;
 		rt::fcntl(sock.fd, rt::F_SETFL, fl & ~rt::O_NONBLOCK)!;
 		cb(req, sock, req.user);
 	};
 };
 
-fn connect_tcp_cancel(req: *req) void = {
+fn connect_cancel(req: *req) void = {
 	const sock = req.user: *file;
-	assert(sock.op == op::CONNECT_TCP);
-	sock.op = op::NONE;
-	file_epoll_ctl(sock);
-
-	const file = req_getfile(req) as *file;
-	assert(file.op & op::ACCEPT != 0);
-	file_req_finish(req, &file.accept);
-
-	if (req_list_empty(&file.accept)) {
-		file.op &= ~op::ACCEPT;
-		file_epoll_ctl(file);
-	};
-};
-
-fn connect_unix_cancel(req: *req) void = {
-	const sock = req.user: *file;
-	assert(sock.op == op::CONNECT_UNIX);
-	sock.op = op::NONE;
-	file_epoll_ctl(sock);
+	assert(sock.op == op::CONNECT_TCP || sock.op == op::CONNECT_UNIX);
+	close(sock);
 };
 
 // Accepts an incoming connection on a listening socket, which was set up with

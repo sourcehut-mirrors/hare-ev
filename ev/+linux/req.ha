@@ -1,6 +1,4 @@
 export type req = struct {
-	// TODO: This is a footgun:
-	// We should probably put the request type into this struct
 	union {
 		file: nullable *file,
 		loop: nullable *loop,
@@ -24,11 +22,6 @@ export type req_list = struct {
 // Returns the [[file]] associated with a [[req]]uest, if any.
 export fn req_getfile(req: *req) nullable *file = {
 	return req.file;
-};
-
-// Returns the [[loop]] associated with a [[req]]uest, if any.
-export fn req_getloop(req: *req) nullable *loop = {
-	return req.loop;
 };
 
 // Returns the user data associated with a [[req]]uest, if any.
