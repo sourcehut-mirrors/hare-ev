@@ -5,26 +5,32 @@ use net::ip;
 use rt;
 use unix::signal;
 
-export type op = enum u64 {
+export type op = enum u32 {
 	NONE     = 0,
-	READV    = 1 << 0,
-	WRITEV   = 1 << 1,
-	SENDTO   = 1 << 2,
-	RECVFROM = 1 << 3,
-	SEND     = 1 << 4,
-	RECV     = 1 << 5,
 
-	READABLE     = 1 << 16,
-	WRITABLE     = 2 << 16,
-	ACCEPT       = 3 << 16,
-	CONNECT_TCP  = 4 << 16,
-	CONNECT_UNIX = 5 << 16,
-	SIGNAL       = 6 << 16,
-	TIMER        = 7 << 16,
-	WAIT         = 12 << 16,
+	READV     = 1 << 0,
+	RECV      = 1 << 1,
+	RECVFROM  = 1 << 2,
+	READABLE  = 1 << 3,
+	READ_MASK = 0xFF,
+
+	WRITEV     = 1 << 8,
+	SEND       = 1 << 9,
+	SENDTO     = 1 << 10,
+	WRITABLE   = 2 << 11,
+	WRITE_MASK = 0xFF00,
+
+	RW_MASK = 0xFFFF,
+
+	ACCEPT       = 1 << 16,
+	CONNECT_TCP  = 2 << 16,
+	CONNECT_UNIX = 3 << 16,
+	SIGNAL       = 4 << 16,
+	TIMER        = 5 << 16,
+	WAIT         = 6 << 16,
 };
 
-export type fflags = enum uint {
+export type fflags = enum u32 {
 	NONE = 0,
 	PAUSED = 1 << 30,
 	BLOCKING = 1 << 31,
@@ -39,23 +45,12 @@ export type file = struct {
 	flags: fflags,
 	user: nullable *opaque,
 
-	// In-flight request lists
-	//
-	// XXX: Not all of these are straightforwardly compatible, perhaps we
-	// can deduplicate them. It doesn't make sense to have read and recv in
-	// flight on the same file at once. In any case they aren't
-	// distinguishable on our end so it will almost certainly cause
-	// problems when the events come in.
-	readv: req_list,
-	writev: req_list,
-	accept: req_list,
-	recv: req_list,
-	recvfrom: req_list,
-	send: req_list,
-	sendto: req_list,
-	readable: req_list,
-	writable: req_list,
-	// Serialized operations:
+	// Request queues
+	readq: req_list,
+	writeq: req_list,
+	acceptq: req_list,
+
+	// Serialized requests
 	union {
 		connect: nullable *sockreq,
 		timer: nullable *timer,
@@ -66,6 +61,50 @@ export type file = struct {
 	// Linked list of files to be closed, head is on [[loop]]
 	close_link: nullable *file,
 };
+
+// Enables the desired operation on a file and links the given request into the
+// appropriate request queue.
+fn file_begin(file: *file, req: *req, kind: op) void = {
+	const read = kind & op::READ_MASK != 0;
+	const write = kind & op::WRITE_MASK != 0;
+	const mask: op =
+		if (read) op::READ_MASK
+		else if (write) op::WRITE_MASK
+		else ~op::RW_MASK;
+
+	const prev = file.op & mask;
+	assert(prev == op::NONE || prev == kind,
+		"Attempted to schedule incompatible I/O requests in parallel, "
+		"e.g. read and recv");
+
+	file.op |= kind;
+	file_epoll_ctl(file);
+
+	if (read) {
+		req_link(&file.readq, &req.link);
+	} else if (write) {
+		req_link(&file.writeq, &req.link);
+	};
+};
+
+fn file_end(file: *file, kind: op) void = {
+	const read = kind & op::READ_MASK != 0;
+	const write = kind & op::WRITE_MASK != 0;
+	const mask: op =
+		if (read) op::READ_MASK
+		else if (write) op::WRITE_MASK
+		else ~op::RW_MASK;
+
+	const prev = file.op & mask;
+	assert(prev == kind || prev == op::NONE); // Invariant
+
+	if (read && req_list_empty(&file.readq)) {
+		file.op &= ~op::READ_MASK;
+		file_epoll_ctl(file);
+	} else if (write && req_list_empty(&file.writeq)) {
+		file.op &= ~op::WRITE_MASK;
+		file_epoll_ctl(file);
+	};
 };
 
 // Initializes a file [[req]]est.
@@ -86,8 +125,8 @@ fn file_req_finish(req: *req, list: *req_list) void = {
 	const file = req.file as *file;
 	assert(file.ev.nrequest != 0);
 	file.ev.nrequest -= 1;
-	req_unlink(list, &req.link);
 	req.cancel = null;
+	req_unlink(list, &req.link);
 };
 
 fn file_get_request(head: *req_list) *req = {

@@ -230,19 +230,17 @@ export fn accept(
 	req.flags = flags;
 	req.acceptcb = cb;
 
-	file.op |= op::ACCEPT;
-	file_epoll_ctl(file);
-	req_link(&file.accept, &req.link);
+	file_begin(file, req, op::ACCEPT);
+	req_link(&file.acceptq, &req.link);
 };
 
 fn accept_ready(
 	sock: *file,
 	ev: *rt::epoll_event,
 ) void = {
-	assert(sock.op & op::ACCEPT != 0);
-	assert(ev.events & rt::EPOLLIN != 0);
-	let req = file_get_request(&sock.accept): *sockreq;
-	file_req_finish(req, &sock.accept);
+	assert(sock.op & ~op::RW_MASK == op::ACCEPT);
+	let req = file_get_request(&sock.acceptq): *sockreq;
+	file_req_finish(req, &sock.acceptq);
 
 	const cb = req.acceptcb as *acceptcb;
 	const r = tcp::accept(sock.fd, req.flags);
@@ -255,19 +253,18 @@ fn accept_ready(
 		cb(req, err, req.user);
 	};
 
-	if (req_list_empty(&sock.accept)) {
-		sock.op &= ~op::ACCEPT;
+	if (req_list_empty(&sock.acceptq)) {
+		sock.op &= op::RW_MASK;
 		file_epoll_ctl(sock);
 	};
 };
 
 fn accept_cancel(req: *req) void = {
-	const file = req_getfile(req) as *file;
-	assert(file.op & op::ACCEPT != 0);
-	file_req_finish(req, &file.accept);
+	const sock = req_getfile(req) as *file;
+	file_req_finish(req, &sock.acceptq);
 
-	if (req_list_empty(&file.accept)) {
-		file.op &= ~op::ACCEPT;
-		file_epoll_ctl(file);
+	if (req_list_empty(&sock.acceptq)) {
+		sock.op &= op::RW_MASK;
+		file_epoll_ctl(sock);
 	};
 };

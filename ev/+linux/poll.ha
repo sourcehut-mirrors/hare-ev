@@ -42,39 +42,30 @@ export fn readable(
 	req.cb = cb;
 
 	if (file.flags & fflags::BLOCKING != 0) {
-		file_req_finish(req, &file.readable);
+		file_req_finish(req, &file.readq);
 		cb(req, req.user);
 		return;
 	};
 
-	file.op |= op::READABLE;
-	file_epoll_ctl(file);
-	req_link(&file.readable, &req.link);
+	file_begin(file, req, op::READABLE);
 };
 
 fn readable_ready(file: *file, ev: *rt::epoll_event) void = {
 	assert(file.op & op::READABLE != 0);
-	let req = file_get_request(&file.readable): *pollreq;
-	file_req_finish(req, &file.readable);
+	let req = file_get_request(&file.readq): *pollreq;
+	file_req_finish(req, &file.readq);
 
 	const cb = req.cb as *pollcb;
 	cb(req, req.user);
 
-	if (req_list_empty(&file.readable)) {
-		file.op &= ~op::READABLE;
-		file_epoll_ctl(file);
-	};
+	file_end(file, op::READABLE);
 };
 
 fn readable_cancel(req: *req) void = {
 	const file = req_getfile(req) as *file;
 	assert(file.op & op::READABLE != 0);
-	file_req_finish(req, &file.readable);
-
-	if (req_list_empty(&file.readable)) {
-		file.op &= ~op::READABLE;
-		file_epoll_ctl(file);
-	};
+	file_req_finish(req, &file.readq);
+	file_end(file, op::READABLE);
 };
 
 // Executes the callback when a given file is writable. Cannot be combined with
@@ -87,37 +78,28 @@ export fn writable(
 	req.cb = cb;
 
 	if (file.flags & fflags::BLOCKING != 0) {
-		file_req_finish(req, &file.writable);
+		file_req_finish(req, &file.writeq);
 		cb(req, req.user);
 		return;
 	};
 
-	file.op |= op::WRITABLE;
-	file_epoll_ctl(file);
-	req_link(&file.writable, &req.link);
+	file_begin(file, req, op::WRITABLE);
 };
 
 fn writable_ready(file: *file, ev: *rt::epoll_event) void = {
 	assert(file.op & op::WRITABLE != 0);
-	let req = file_get_request(&file.writable): *pollreq;
-	file_req_finish(req, &file.writable);
+	let req = file_get_request(&file.writeq): *pollreq;
+	file_req_finish(req, &file.writeq);
 
 	const cb = req.cb as *pollcb;
 	cb(req, req.user);
 
-	if (req_list_empty(&file.writable)) {
-		file.op &= ~op::WRITABLE;
-		file_epoll_ctl(file);
-	};
+	file_end(file, op::WRITABLE);
 };
 
 fn writable_cancel(req: *req) void = {
 	const file = req_getfile(req) as *file;
 	assert(file.op & op::WRITABLE != 0);
-	file_req_finish(req, &file.writable);
-
-	if (req_list_empty(&file.writable)) {
-		file.op &= ~op::WRITABLE;
-		file_epoll_ctl(file);
-	};
+	file_req_finish(req, &file.writeq);
+	file_end(file, op::WRITABLE);
 };

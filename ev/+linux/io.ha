@@ -88,20 +88,18 @@ export fn readv(
 
 	if (file.flags & fflags::BLOCKING != 0) {
 		const r = io::readv(file.fd, vec...);
-		file_req_finish(req, &file.readv);
+		file_req_finish(req, &file.readq);
 		cb(req, r, req.user);
 		return;
 	};
 
-	file.op |= op::READV;
-	file_epoll_ctl(file);
-	req_link(&file.readv, &req.link);
+	file_begin(file, req, op::READV);
 };
 
 fn readv_ready(file: *file, ev: *rt::epoll_event) void = {
-	assert(file.op & op::READV != 0);
-	let req = file_get_request(&file.readv): *ioreq;
-	file_req_finish(req, &file.readv);
+	assert(file.op & op::READ_MASK == op::READV);
+	let req = file_get_request(&file.readq): *ioreq;
+	file_req_finish(req, &file.readq);
 
 	const cb = req.readcb as *readcb;
 	if (ev.events & rt::EPOLLHUP != 0) {
@@ -111,21 +109,14 @@ fn readv_ready(file: *file, ev: *rt::epoll_event) void = {
 		cb(req, r, req.user);
 	};
 
-	if (req_list_empty(&file.readv)) {
-		file.op &= ~op::READV;
-		file_epoll_ctl(file);
-	};
+	file_end(file, op::READV);
 };
 
 fn readv_cancel(req: *req) void = {
 	const file = req_getfile(req) as *file;
-	assert(file.op & op::READV != 0);
-	file_req_finish(req, &file.readv);
-
-	if (req_list_empty(&file.readv)) {
-		file.op &= ~op::READV;
-		file_epoll_ctl(file);
-	};
+	assert(file.op & op::READ_MASK == op::READV);
+	file_req_finish(req, &file.readq);
+	file_end(file, op::READV);
 };
 
 // Schedules a write operation on a file object. The provided buffer must be
@@ -153,38 +144,29 @@ export fn writev(
 
 	if (file.flags & fflags::BLOCKING != 0) {
 		const r = io::writev(file.fd, vec...);
-		file_req_finish(req, &file.writev);
+		file_req_finish(req, &file.writeq);
 		cb(req, r, req.user);
 		return;
 	};
 
-	file.op |= op::WRITEV;
-	file_epoll_ctl(file);
-	req_link(&file.writev, &req.link);
+	file_begin(file, req, op::WRITEV);
 };
 
 fn writev_ready(file: *file, ev: *rt::epoll_event) void = {
-	assert(file.op & op::WRITEV != 0);
-	let req = file_get_request(&file.writev): *ioreq;
-	file_req_finish(req, &file.writev);
+	assert(file.op & op::WRITE_MASK == op::WRITEV);
+	let req = file_get_request(&file.writeq): *ioreq;
+	file_req_finish(req, &file.writeq);
 
 	const cb = req.writecb as *writecb;
 	const r = io::writev(file.fd, req.vec...);
 	cb(req, r, req.user);
 
-	if (req_list_empty(&file.writev)) {
-		file.op &= ~op::WRITEV;
-		file_epoll_ctl(file);
-	};
+	file_end(file, op::WRITEV);
 };
 
 fn writev_cancel(req: *req) void = {
 	const file = req_getfile(req) as *file;
-	assert(file.op & op::WRITEV != 0);
-	file_req_finish(req, &file.writev);
-
-	if (req_list_empty(&file.writev)) {
-		file.op &= ~op::WRITEV;
-		file_epoll_ctl(file);
-	};
+	assert(file.op & op::WRITE_MASK == op::WRITEV);
+	file_req_finish(req, &file.writeq);
+	file_end(file, op::WRITEV);
 };

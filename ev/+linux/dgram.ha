@@ -87,10 +87,7 @@ export fn recvfrom(
 	const file = file_req_init(req, &recvfrom_cancel);
 	req.buf = buf;
 	req.recvfromcb = cb;
-
-	file.op |= op::RECVFROM;
-	file_epoll_ctl(file);
-	req_link(&file.recvfrom, &req.link);
+	file_begin(file, req, op::RECVFROM);
 };
 
 fn recvfrom_ready(
@@ -98,8 +95,8 @@ fn recvfrom_ready(
 	ev: *rt::epoll_event,
 ) void = {
 	assert(sock.op & op::RECVFROM != 0);
-	let req = file_get_request(&sock.recvfrom): *dgramreq;
-	file_req_finish(req, &sock.recvfrom);
+	let req = file_get_request(&sock.readq): *dgramreq;
+	file_req_finish(req, &sock.readq);
 
 	let src: ip::addr = ip::ANY_V4, port = 0u16;
 	const cb = req.recvfromcb: *recvfromcb;
@@ -110,21 +107,14 @@ fn recvfrom_ready(
 		cb(req, (n, src, port), req.user);
 	};
 
-	if (req_list_empty(&sock.recvfrom)) {
-		sock.op &= ~op::RECVFROM;
-		file_epoll_ctl(sock);
-	};
+	file_end(sock, op::RECVFROM);
 };
 
 fn recvfrom_cancel(req: *req) void = {
 	const file = req_getfile(req) as *file;
 	assert(file.op & op::RECVFROM != 0);
-	file_req_finish(req, &file.recvfrom);
-
-	if (req_list_empty(&file.recvfrom)) {
-		file.op &= ~op::RECVFROM;
-		file_epoll_ctl(file);
-	};
+	file_req_finish(req, &file.readq);
+	file_end(file, op::RECVFROM);
 };
 
 // Receive a datagram from a socket (connected with e.g. [[connect_udp]]).
@@ -136,10 +126,7 @@ export fn recv(
 	const file = file_req_init(req, &recv_cancel);
 	req.buf = buf;
 	req.recvcb = cb;
-
-	file.op |= op::RECV;
-	file_epoll_ctl(file);
-	req_link(&file.recv, &req.link);
+	file_begin(file, req, op::RECV);
 };
 
 fn recv_ready(
@@ -147,28 +134,21 @@ fn recv_ready(
 	ev: *rt::epoll_event,
 ) void = {
 	assert(sock.op & op::RECV != 0);
-	let req = file_get_request(&sock.recv): *dgramreq;
-	file_req_finish(req, &sock.recv);
+	let req = file_get_request(&sock.readq): *dgramreq;
+	file_req_finish(req, &sock.readq);
 
 	const cb = req.recvcb as *recvcb;
 	const r = udp::recv(sock.fd, req.buf);
 	cb(req, r, req.user);
 
-	if (req_list_empty(&sock.recv)) {
-		sock.op &= ~op::RECV;
-		file_epoll_ctl(sock);
-	};
+	file_end(sock, op::RECV);
 };
 
 fn recv_cancel(req: *req) void = {
 	const file = req_getfile(req) as *file;
 	assert(file.op & op::RECV != 0);
-	file_req_finish(req, &file.recv);
-
-	if (req_list_empty(&file.recv)) {
-		file.op &= ~op::RECV;
-		file_epoll_ctl(file);
-	};
+	file_req_finish(req, &file.readq);
+	file_end(file, op::RECV);
 };
 
 // Sends a datagram to a socket (connected with e.g. [[connect_udp]]).
@@ -180,10 +160,7 @@ export fn send(
 	const file = file_req_init(req, &send_cancel);
 	req.buf = buf;
 	req.sendcb = cb;
-
-	file.op |= op::SEND;
-	file_epoll_ctl(file);
-	req_link(&file.send, &req.link);
+	file_begin(file, req, op::SEND);
 };
 
 fn send_ready(
@@ -191,28 +168,21 @@ fn send_ready(
 	ev: *rt::epoll_event,
 ) void = {
 	assert(sock.op & op::SEND != 0);
-	let req = file_get_request(&sock.send): *dgramreq;
-	file_req_finish(req, &sock.send);
+	let req = file_get_request(&sock.writeq): *dgramreq;
+	file_req_finish(req, &sock.writeq);
 
 	const cb = req.sendcb as *sendcb;
 	const r = udp::send(sock.fd, req.buf);
 	cb(req, r, req.user);
 
-	if (req_list_empty(&sock.send)) {
-		sock.op &= ~op::SEND;
-		file_epoll_ctl(sock);
-	};
+	file_end(sock, op::SEND);
 };
 
 fn send_cancel(req: *req) void = {
 	const file = req_getfile(req) as *file;
 	assert(file.op & op::SEND != 0);
-	file_req_finish(req, &file.send);
-
-	if (req_list_empty(&file.send)) {
-		file.op &= ~op::SEND;
-		file_epoll_ctl(file);
-	};
+	file_req_finish(req, &file.writeq);
+	file_end(file, op::SEND);
 };
 
 // Schedules a send operation on a socket.
@@ -228,10 +198,7 @@ export fn sendto(
 	req.dest = dest;
 	req.port = port;
 	req.sendcb = cb;
-
-	file.op |= op::SENDTO;
-	file_epoll_ctl(file);
-	req_link(&file.sendto, &req.link);
+	file_begin(file, req, op::SENDTO);
 };
 
 fn sendto_ready(
@@ -239,26 +206,19 @@ fn sendto_ready(
 	ev: *rt::epoll_event,
 ) void = {
 	assert(sock.op & op::SENDTO != 0);
-	let req = file_get_request(&sock.sendto): *dgramreq;
-	file_req_finish(req, &sock.sendto);
+	let req = file_get_request(&sock.writeq): *dgramreq;
+	file_req_finish(req, &sock.writeq);
 
 	const cb = req.sendcb as *sendcb;
 	const r = udp::sendto(sock.fd, req.buf, req.dest, req.port);
 	cb(req, r, req.user);
 
-	if (req_list_empty(&sock.sendto)) {
-		sock.op &= ~op::SENDTO;
-		file_epoll_ctl(sock);
-	};
+	file_end(sock, op::SENDTO);
 };
 
 fn sendto_cancel(req: *req) void = {
 	const file = req_getfile(req) as *file;
 	assert(file.op & op::SENDTO != 0);
-	file_req_finish(req, &file.sendto);
-
-	if (req_list_empty(&file.sendto)) {
-		file.op &= ~op::SENDTO;
-		file_epoll_ctl(file);
-	};
+	file_req_finish(req, &file.writeq);
+	file_end(file, op::SENDTO);
 };
