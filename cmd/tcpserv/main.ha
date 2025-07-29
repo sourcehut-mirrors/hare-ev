@@ -21,7 +21,6 @@ type client = struct {
 	addr: ip::addr,
 	port: u16,
 	buf: [os::BUFSZ]u8,
-	wbuf: []u8,
 	ioreq: ev::ioreq,
 };
 
@@ -117,8 +116,7 @@ fn client_read(
 	case let n: size =>
 		yield n;
 	};
-	client.wbuf = client.buf[..n];
-	ev::write(req, client.wbuf, &client_write);
+	ev::write(req, client.buf[..n], &client_write);
 };
 
 fn client_write(
@@ -137,14 +135,7 @@ fn client_write(
 	case let n: size =>
 		yield n;
 	};
-
-	static delete(client.wbuf[..n]);
-
-	if (len(client.wbuf) != 0) {
-		ev::write(req, client.wbuf, &client_write);
-	} else {
-		ev::read(req, client.buf, &client_read);
-	};
+	ev::read(req, client.buf, &client_read);
 };
 
 fn client_close(client: *client) void = {

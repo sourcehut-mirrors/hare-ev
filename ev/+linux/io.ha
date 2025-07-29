@@ -19,6 +19,7 @@ export type ioreq = struct {
 	req,
 	buf: io::vector,
 	vec: []io::vector,
+	amt: size,
 	union {
 		readcb: nullable *readcb,
 		writecb: nullable *writecb,
@@ -118,6 +119,9 @@ export fn write(
 
 // Schedules a vectored write operation on a file object. The provided buffer
 // must be valid for the duration of the write operation.
+//
+// The underlying operation will call [[io::writev]] as many times as necessary
+// to write out the entire buffer before running the callback.
 export fn writev(
 	req: *ioreq,
 	vec: []io::vector,
@@ -125,10 +129,16 @@ export fn writev(
 ) void = {
 	const file = file_req_init(req, &writev_cancel);
 	req.vec = vec;
+	req.amt = 0;
 	req.writecb = cb;
 
 	if (file.flags & fflags::BLOCKING != 0) {
-		const r = io::writev(file.fd, vec...);
+		let r: (size | io::error) = 0z;
+		for (len(req.vec) != 0) {
+			r = writev_proc(req, file);
+			if (r is io::error) break;
+		};
+
 		file_req_finish(req, &file.writeq);
 		cb(req, r, req.user);
 		return;
@@ -140,13 +150,40 @@ export fn writev(
 fn writev_ready(file: *file, ev: *rt::epoll_event) void = {
 	assert(file.op & op::WRITE_MASK == op::WRITEV);
 	let req = file_get_request(&file.writeq): *ioreq;
-	file_req_finish(req, &file.writeq);
 
 	const cb = req.writecb as *writecb;
-	const r = io::writev(file.fd, req.vec...);
-	cb(req, r, req.user);
+	const r = match (writev_proc(req, file)) {
+	case size =>
+		if (len(req.vec) != 0) {
+			return;
+		};
+		yield req.amt;
+	case let err: io::error =>
+		yield err;
+	};
 
+	file_req_finish(req, &file.writeq);
+	cb(req, r, req.user);
 	file_end(file, op::WRITEV);
+};
+
+fn writev_proc(req: *ioreq, file: *file) (size | io::error) = {
+	let n = io::writev(file.fd, req.vec...)?;
+	req.amt += n;
+
+	for (len(req.vec) > 0 && n >= len(req.vec)) {
+		const buf = io::vector_buf(&req.vec[0]);
+		n -= len(buf);
+		req.vec = req.vec[1..];
+	};
+
+	if (n > 0) {
+		let buf = io::vector_buf(&req.vec[0]);
+		buf = buf[n..];
+		req.vec[0] = io::mkvector(buf);
+	};
+
+	return req.amt;
 };
 
 fn writev_cancel(req: *req) void = {

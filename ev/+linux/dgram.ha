@@ -149,6 +149,9 @@ fn recv_cancel(req: *req) void = {
 };
 
 // Sends a datagram to a socket (connected with e.g. [[connect_udp]]).
+//
+// The underlying operation will call [[net::send]] as many times as necessary
+// to write out the entire buffer before running the callback.
 export fn send(
 	req: *dgramreq,
 	buf: []u8,
@@ -193,9 +196,10 @@ fn send_cancel(req: *req) void = {
 	file_end(file, op::SEND);
 };
 
-// Schedules a send operation on a socket. The callback is not done until the
-// entire buffer is sent (i.e. the "size" passed to the callback will always be
-// the buffer length).
+// Schedules a send operation on a socket.
+//
+// The underlying operation will call [[net::sendto]] as many times as necessary
+// to write out the entire buffer before running the callback.
 export fn sendto(
 	req: *dgramreq,
 	buf: []u8,
