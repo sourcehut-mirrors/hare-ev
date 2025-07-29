@@ -48,11 +48,6 @@ export fn ioreq_init(
 	};
 };
 
-// Returns the [[io::vector]]s associated with an [[ioreq]].
-export fn ioreq_getvectors(req: *ioreq) []io::vector = {
-	return req.vec;
-};
-
 // Schedules a read operation on a file object. The provided buffer must be
 // valid for the duration of the read operation.
 export fn read(

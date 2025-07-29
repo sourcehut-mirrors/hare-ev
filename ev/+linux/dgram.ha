@@ -65,11 +65,6 @@ export fn dgramreq_init(
 	};
 };
 
-// Returns the buffer used for this [[dgramreq]].
-export fn dgramreq_getbuf(req: *dgramreq) []u8 = {
-	return req.buf;
-};
-
 // Returns the destination IP address and port specified when this [[dgramreq]]
 // was passed to [[sendto]]. The results are undefined if this [[dgramreq]] was
 // not last used for a [[sendto]] operation.
