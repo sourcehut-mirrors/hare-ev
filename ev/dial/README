@@ -1,0 +1,7 @@
+ev::dial: high-level asynchronous connect operations
+
+This module is an asynchronous analogue to [[net::dial]] which provides
+high-level support for connecting to a remote server with an event loop provided
+by [[ev::]]. It handles DNS resolution and protocol selection in an abstract,
+asynchronous manner, ultimately providing the user with an [[ev::file]]
+connected to the desired remote server.

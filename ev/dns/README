@@ -1,0 +1,5 @@
+ev::dns: asynchronous DNS client
+
+This module can execute DNS queries against arbitrary DNS servers or using the
+local DNS resolver configuration asynchronously using an event loop provided by
+[[ev::]].
