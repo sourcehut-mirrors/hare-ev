@@ -90,7 +90,7 @@ export fn dnsreq_init(
 	req.timer = ev::timer_init(loop, clock::MONOTONIC, &on_timeout_expired)?;
 	req.timeout = timeout;
 	req.qbuf = alloc([0...], 512)?;
-	req.rbuf = alloc([0...], 512)?;
+	req.rbuf = alloc([0...], types::U16_MAX)?;
 	req.user = user;
 	ok = true;
 	return req;
@@ -296,18 +296,7 @@ fn on_tcp_read_length(
 		return;
 	};
 
-	const resp_len = endian::begetu16(dnsreq.zbuf);
-	dnsreq.resp_len = resp_len;
-
-	if (len(dnsreq.rbuf) < resp_len) {
-		match (append(dnsreq.rbuf, [0...], resp_len - len(dnsreq.rbuf))) {
-		case nomem =>
-			query_complete(dnsreq, nomem);
-			return;
-		case void => void;
-		};
-	};
-
+	dnsreq.resp_len = endian::begetu16(dnsreq.zbuf);
 	ev::read(req, dnsreq.rbuf, &on_tcp_read_resp);
 };
 
