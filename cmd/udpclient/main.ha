@@ -65,15 +65,9 @@ fn sock_on_send(
 	result: (size | net::error),
 	user: nullable *opaque,
 ) void = {
+	assert(result is size);
 	const state = user: *state;
-	const n = result!;
-
-	static delete(state.wbuf[..n]);
-	if (len(state.wbuf) != 0) {
-		ev::send(req, state.wbuf, &sock_on_send);
-	} else {
-		ev::read(&state.readreq, state.stdbuf, &stdin_on_read);
-	};
+	ev::read(&state.readreq, state.stdbuf, &stdin_on_read);
 };
 
 fn sock_on_recv(

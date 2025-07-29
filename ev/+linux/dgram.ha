@@ -2,6 +2,7 @@ use net;
 use net::ip;
 use net::udp;
 use rt;
+use fmt; // XXX TEMP
 
 // Callback for a [[recvfrom]] operation. The second parameter is either an
 // error or a tuple of the number of bytes received and the IP address and port
@@ -29,6 +30,7 @@ export type sendcb = fn(
 export type dgramreq = struct {
 	req,
 	buf: []u8,
+	amt: size,
 	dest: ip::addr,
 	port: u16,
 	union {
@@ -154,6 +156,7 @@ export fn send(
 ) void = {
 	const file = file_req_init(req, &send_cancel);
 	req.buf = buf;
+	req.amt = 0;
 	req.sendcb = cb;
 	file_begin(file, req, op::SEND);
 };
@@ -164,12 +167,22 @@ fn send_ready(
 ) void = {
 	assert(sock.op & op::SEND != 0);
 	let req = file_get_request(&sock.writeq): *dgramreq;
-	file_req_finish(req, &sock.writeq);
 
 	const cb = req.sendcb as *sendcb;
-	const r = udp::send(sock.fd, req.buf);
-	cb(req, r, req.user);
+	const r = match (udp::send(sock.fd, req.buf)) {
+	case let n: size =>
+		req.amt += n;
+		req.buf = req.buf[n..];
+		if (len(req.buf) != 0) {
+			return;
+		};
+		yield req.amt;
+	case let err: net::error =>
+		yield err;
+	};
 
+	file_req_finish(req, &sock.writeq);
+	cb(req, len(req.buf), req.user);
 	file_end(sock, op::SEND);
 };
 
@@ -180,7 +193,9 @@ fn send_cancel(req: *req) void = {
 	file_end(file, op::SEND);
 };
 
-// Schedules a send operation on a socket.
+// Schedules a send operation on a socket. The callback is not done until the
+// entire buffer is sent (i.e. the "size" passed to the callback will always be
+// the buffer length).
 export fn sendto(
 	req: *dgramreq,
 	buf: []u8,
@@ -190,6 +205,7 @@ export fn sendto(
 ) void = {
 	const file = file_req_init(req, &sendto_cancel);
 	req.buf = buf;
+	req.amt = 0;
 	req.dest = dest;
 	req.port = port;
 	req.sendcb = cb;
@@ -202,12 +218,22 @@ fn sendto_ready(
 ) void = {
 	assert(sock.op & op::SENDTO != 0);
 	let req = file_get_request(&sock.writeq): *dgramreq;
-	file_req_finish(req, &sock.writeq);
 
 	const cb = req.sendcb as *sendcb;
-	const r = udp::sendto(sock.fd, req.buf, req.dest, req.port);
-	cb(req, r, req.user);
+	const r = match (udp::sendto(sock.fd, req.buf, req.dest, req.port)) {
+	case let n: size =>
+		req.amt += n;
+		req.buf = req.buf[n..];
+		if (len(req.buf) != 0) {
+			return;
+		};
+		yield req.amt;
+	case let err: net::error =>
+		yield err;
+	};
 
+	file_req_finish(req, &sock.writeq);
+	cb(req, len(req.buf), req.user);
 	file_end(sock, op::SENDTO);
 };
 

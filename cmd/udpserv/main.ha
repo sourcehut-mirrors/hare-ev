@@ -8,7 +8,6 @@ use os;
 type state = struct {
 	loop: *ev::loop,
 	buf: [os::BUFSZ]u8,
-	wbuf: []u8,
 };
 
 export fn main() void = {
@@ -52,8 +51,7 @@ fn on_recv(
 	};
 
 	log::printfln("{} bytes from {}:{}", n, ip::string(src), port);
-	state.wbuf = state.buf[..n];
-	ev::sendto(req, state.wbuf, src, port, &on_send_complete);
+	ev::sendto(req, state.buf[..n], src, port, &on_send_complete);
 };
 
 fn on_send_complete(
@@ -64,20 +62,11 @@ fn on_send_complete(
 	const state = user: *state;
 	const (dest, port) = ev::dgramreq_getdest(req);
 
-	const n = match (r) {
+	match (r) {
+	case size =>
+		ev::recvfrom(req, state.buf, &on_recv);
 	case let err: net::error =>
 		log::println("Error: send:", net::strerror(err));
 		ev::stop(state.loop);
-		return;
-	case let n: size =>
-		yield n;
-	};
-
-	static delete(state.wbuf[..n]);
-
-	if (len(state.wbuf) != 0) {
-		ev::sendto(req, state.wbuf, dest, port, &on_send_complete);
-	} else {
-		ev::recvfrom(req, state.buf, &on_recv);
 	};
 };

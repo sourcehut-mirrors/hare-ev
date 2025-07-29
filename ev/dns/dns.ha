@@ -268,9 +268,7 @@ fn on_tcp_write(
 	const dnsreq = user: *dnsreq;
 
 	match (result) {
-	case let z: size =>
-		// TODO: https://todo.sr.ht/~sircmpwn/hare-ev/16
-		assert(z: u16 == dnsreq.qlen + 2);
+	case size => void;
 	case let err: io::error =>
 		query_complete(dnsreq, err);
 		return;
