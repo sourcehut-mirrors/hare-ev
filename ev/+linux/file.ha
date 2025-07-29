@@ -291,20 +291,24 @@ fn sort_events(a: const *opaque, b: const *opaque) int = {
 // Updates epoll events for a given file. For internal use.
 fn file_epoll_ctl(file: *file) void = {
 	let events = rt::EPOLLONESHOT;
-	if (file.op & op::READV != 0 || file.op == op::READABLE) {
+
+	switch (file.op & op::READ_MASK) {
+	case op::READV, op::READABLE =>
 		events |= rt::EPOLLIN | rt::EPOLLHUP;
-	};
-	if (file.op & op::WRITEV != 0 || file.op == op::WRITABLE) {
-		events |= rt::EPOLLOUT | rt::EPOLLHUP;
-	};
-	if (file.op & op::RECV != 0 || file.op & op::RECVFROM != 0) {
+	case op::RECV, op::RECVFROM =>
 		events |= rt::EPOLLIN;
-	};
-	if (file.op & op::SEND != 0 || file.op & op::SENDTO != 0) {
-		events |= rt::EPOLLOUT;
+	case => void;
 	};
 
-	switch (file.op) {
+	switch (file.op & op::WRITE_MASK) {
+	case op::WRITEV, op::WRITABLE =>
+		events |= rt::EPOLLOUT | rt::EPOLLHUP;
+	case op::SEND, op::SENDTO =>
+		events |= rt::EPOLLOUT;
+	case => void;
+	};
+
+	switch (file.op & ~op::RW_MASK) {
 	case op::ACCEPT =>
 		events |= rt::EPOLLIN;
 	case op::CONNECT_TCP, op::CONNECT_UNIX =>
@@ -316,8 +320,7 @@ fn file_epoll_ctl(file: *file) void = {
 		events |= rt::EPOLLIN;
 	case op::WAIT =>
 		events |= rt::EPOLLIN;
-	case =>
-		yield;
+	case => void;
 	};
 
 	let ev = rt::epoll_event {
