@@ -2,7 +2,6 @@ use net;
 use net::ip;
 use net::udp;
 use rt;
-use fmt; // XXX TEMP
 
 // Callback for a [[recvfrom]] operation. The second parameter is either an
 // error or a tuple of the number of bytes received and the IP address and port

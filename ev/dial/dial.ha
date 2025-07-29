@@ -1,12 +1,10 @@
 use ev;
+use ev::dns;
 use fmt;
 use net;
 use net::dial;
 use net::ip;
 use net::uri;
-
-// Callback for a [[dial]] operation.
-export type dialcb = fn(user: nullable *opaque, r: (*ev::file | error)) void;
 
 // Dials a remote address, establishing a connection and returning the resulting
 // [[net::socket]] to the callback. The proto parameter should be the transport
@@ -16,23 +14,26 @@ export type dialcb = fn(user: nullable *opaque, r: (*ev::file | error)) void;
 //
 // See also [[net::dial::dial]].
 export fn dial(
-	loop: *ev::loop,
+	req: *dialreq,
 	proto: str,
 	address: str,
 	service: str,
 	cb: *dialcb,
-	user: nullable *opaque = null,
-) (ev::req | error) = {
+) (void | error) = {
 	for (const p .. default_protocols) {
 		if (p.name == proto) {
-			return p.dial(loop, address, service, cb, user);
+			p.dial(req, address, service, cb)?;
+			return;
 		};
 	};
+
 	for (const p .. protocols) {
 		if (p.name == proto) {
-			return p.dial(loop, address, service, cb, user);
+			p.dial(req, address, service, cb)?;
+			return;
 		};
 	};
+
 	return net::unknownproto: net::error;
 };
 
@@ -43,12 +44,11 @@ def HOST_MAX: size = 255;
 //
 // See also [[net::dial::uri]].
 export fn dial_uri(
-	loop: *ev::loop,
+	req: *dialreq,
 	proto: str,
 	uri: *uri::uri,
 	cb: *dialcb,
-	user: nullable *opaque = null,
-) (ev::req | error) = {
+) (void | error) = {
 	if (uri.host is str && len(uri.host as str) > HOST_MAX) {
 		return invalid_address;
 	};
@@ -68,5 +68,5 @@ export fn dial_uri(
 		yield fmt::bsprintf(addr, "[{}]{}{}", host, colon, port)!;
 	};
 
-	return dial(loop, proto, addr, uri.scheme, cb, user);
+	return dial(req, proto, addr, uri.scheme, cb);
 };

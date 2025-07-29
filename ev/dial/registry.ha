@@ -38,13 +38,16 @@ export fn strerror(err: error) const str = {
 };
 
 // A dialer is a function which implements dial for a specific protocol.
+//
+// The [[dialreq]] is guaranteed to be initialized as a loop request (thus
+// req.loop is valid). The dialer is expected to populate the cancellation
+// callback if appropriate.
 export type dialer = fn(
-	loop: *ev::loop,
+	req: *dialreq,
 	addr: str,
 	service: str,
 	cb: *dialcb,
-	user: nullable *opaque,
-) (ev::req | error);
+) (void | error);
 
 type protocol = struct {
 	name: str,
@@ -60,7 +63,7 @@ type service = struct {
 
 let default_protocols: [_]protocol = [
 	protocol { name = "tcp", dial = &dial_tcp },
-	protocol { name = "udp", dial = &dial_udp },
+	//protocol { name = "udp", dial = &dial_udp }, // TODO
 ];
 
 let default_services: [_]service = [

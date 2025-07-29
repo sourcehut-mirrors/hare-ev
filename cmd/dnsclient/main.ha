@@ -1,5 +1,5 @@
 use ev;
-use ev_dns = ev::dns;
+use edns = ev::dns;
 use fmt;
 use net::ip;
 use net::dns;
@@ -10,14 +10,14 @@ export fn main() void = {
 	defer ev::finish(&loop);
 
 	let i = 1z;
-	const req = ev_dns::dnsreq_init(&loop, &i)!;
-	defer ev_dns::dnsreq_finish(&req);
+	const req = edns::req_init(&loop, &i)!;
+	defer edns::req_finish(&req);
 
 	do_query(&req, os::args[i]);
 	ev::run(&loop)!;
 };
 
-fn do_query(req: *ev_dns::dnsreq, targ: str) void = {
+fn do_query(req: *edns::req, targ: str) void = {
 	const domain = dns::parse_domain(targ)!;
 	defer free(domain);
 
@@ -42,11 +42,11 @@ fn do_query(req: *ev_dns::dnsreq, targ: str) void = {
 		],
 		...
 	};
-	ev_dns::query(req, &msg, &on_query)!;
+	edns::query(req, &msg, &on_query)!;
 };
 
 fn on_query(
-	req: *ev_dns::dnsreq,
+	req: *edns::req,
 	r: (*dns::message | dns::error | nomem),
 	user: nullable *opaque,
 ) void = {

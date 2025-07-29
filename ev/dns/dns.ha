@@ -13,12 +13,12 @@ use unix::resolvconf;
 
 // Callback for a [[query]] operation.
 export type querycb = fn(
-	req: *dnsreq,
+	req: *req,
 	r: (*dns::message | dns::error | nomem),
 	user: nullable *opaque,
 ) void;
 
-export type dnsreq = struct {
+export type req = struct {
 	ev::req,
 
 	// UDP state
@@ -59,7 +59,7 @@ export type dnsreq = struct {
 	cb: nullable *querycb,
 };
 
-export def DNSREQ_INIT = dnsreq {
+export def REQ_INIT = req {
 	r4 = ev::DGRAMREQ_INIT,
 	r6 = ev::DGRAMREQ_INIT,
 	timer = ev::TIMER_INIT,
@@ -68,22 +68,22 @@ export def DNSREQ_INIT = dnsreq {
 	...
 };
 
-// Initializes a new [[dnsreq]] for use with [[query]]. This function allocates
-// memory and binds a UDP socket for the lifetime of the [[dnsreq]] object,
-// which must be disposed of with [[dnsreq_finish]].
+// Initializes a new [[req]] for use with [[query]]. This function allocates
+// memory and binds a UDP socket for the lifetime of the [[req]] object,
+// which must be disposed of with [[req_finish]].
 //
-// Only one [[query]] may be performed at a time per [[dnsreq]]. In order to run
-// multiple DNS queries in parallel, one must use multiple [[dnsreq]] objects.
+// Only one [[query]] may be performed at a time per [[req]]. In order to run
+// multiple DNS queries in parallel, one must use multiple [[req]] objects.
 // Once a DNS query completes (when its callback is run) or is cancelled (via
-// [[ev::cancel]]), the [[dnsreq]] object may be reused.
-export fn dnsreq_init(
+// [[ev::cancel]]), the [[req]] object may be reused.
+export fn req_init(
 	loop: *ev::loop,
 	user: nullable *opaque = null,
 	timeout: time::duration = 3 * time::SECOND,
-) (dnsreq | net::error | errors::error | nomem) = {
-	let req = DNSREQ_INIT;
+) (req | net::error | errors::error | nomem) = {
+	let req = REQ_INIT;
 	let ok = false;
-	defer if (!ok) dnsreq_finish(&req);
+	defer if (!ok) req_finish(&req);
 	req.loop = loop;
 	req.s4 = ev::listen_udp(loop, ip::ANY_V4, 0)?;
 	req.s6 = ev::listen_udp(loop, ip::ANY_V6, 0)?;
@@ -96,8 +96,8 @@ export fn dnsreq_init(
 	return req;
 };
 
-// Disposes of resources associated with a [[dnsreq]].
-export fn dnsreq_finish(req: *dnsreq) void = {
+// Disposes of resources associated with a [[req]].
+export fn req_finish(req: *req) void = {
 	ev::cancel(&req.r4);
 	ev::cancel(&req.r6);
 	ev::timer_finish(&req.timer);
@@ -124,7 +124,7 @@ export fn dnsreq_finish(req: *dnsreq) void = {
 // servers from /etc/resolv.conf if none are specified. The DNS message passed
 // to the callback is only valid for the duration of the callback.
 export fn query(
-	req: *dnsreq,
+	req: *req,
 	query: *dns::message,
 	cb: *querycb,
 	servers: ip::addr...
@@ -138,8 +138,8 @@ export fn query(
 		servers = [ip::LOCAL_V6, ip::LOCAL_V4];
 	};
 
-	assert(req.cb == null, "Cannot reuse in-flight dnsreq");
-	assert(req.s4 != null, "Attempted DNS query with uninitialized dnsreq");
+	assert(req.cb == null, "Cannot reuse in-flight DNS req");
+	assert(req.s4 != null, "Attempted DNS query with uninitialized req");
 	const s4 = req.s4 as *ev::file;
 	const s6 = req.s6 as *ev::file;
 
@@ -173,24 +173,24 @@ export fn query(
 };
 
 fn on_recvfrom(
-	req: *ev::dgramreq,
+	dreq: *ev::dgramreq,
 	r: ((size, ip::addr, u16) | net::error),
 	user: nullable *opaque,
 ) void = {
-	const dnsreq = user: *dnsreq;
-	match (post_recv(req, dnsreq, r)) {
+	const dnsreq = user: *req;
+	match (post_recv(dreq, dnsreq, r)) {
 	case let result: (*dns::message | dns::error) =>
 		query_complete(dnsreq, result);
 	case errors::again =>
 		// Wait for the next response in case this one was not suitable
-		ev::recvfrom(req, dnsreq.rbuf, &on_recvfrom);
+		ev::recvfrom(dreq, dnsreq.rbuf, &on_recvfrom);
 	case void => void;
 	};
 };
 
 fn post_recv(
 	udpreq: *ev::dgramreq,
-	dnsreq: *dnsreq,
+	dnsreq: *req,
 	r: ((size, ip::addr, u16) | net::error),
 ) (*dns::message | dns::error | errors::again | void) = {
 	const (z, addr, port) = match (r) {
@@ -236,11 +236,11 @@ fn post_recv(
 };
 
 fn on_tcp_connected(
-	req: *ev::sockreq,
+	sockreq: *ev::sockreq,
 	result: (*ev::file | net::error),
 	user: nullable *opaque,
 ) void = {
-	const dnsreq = user: *dnsreq;
+	const dnsreq = user: *req;
 	const sock = match (result) {
 	case let file: *ev::file =>
 		yield file;
@@ -261,11 +261,11 @@ fn on_tcp_connected(
 };
 
 fn on_tcp_write(
-	req: *ev::ioreq,
+	ioreq: *ev::ioreq,
 	result: (size | io::error),
 	user: nullable *opaque,
 ) void = {
-	const dnsreq = user: *dnsreq;
+	const dnsreq = user: *req;
 
 	match (result) {
 	case size => void;
@@ -274,15 +274,15 @@ fn on_tcp_write(
 		return;
 	};
 
-	ev::read(req, dnsreq.zbuf, &on_tcp_read_length);
+	ev::read(ioreq, dnsreq.zbuf, &on_tcp_read_length);
 };
 
 fn on_tcp_read_length(
-	req: *ev::ioreq,
+	ioreq: *ev::ioreq,
 	result: (size | io::EOF | io::error),
 	user: nullable *opaque,
 ) void = {
-	const dnsreq = user: *dnsreq;
+	const dnsreq = user: *req;
 
 	match (result) {
 	case size => void;
@@ -295,15 +295,15 @@ fn on_tcp_read_length(
 	};
 
 	dnsreq.resp_len = endian::begetu16(dnsreq.zbuf);
-	ev::read(req, dnsreq.rbuf, &on_tcp_read_resp);
+	ev::read(ioreq, dnsreq.rbuf, &on_tcp_read_resp);
 };
 
 fn on_tcp_read_resp(
-	req: *ev::ioreq,
+	ioreq: *ev::ioreq,
 	result: (size | io::EOF | io::error),
 	user: nullable *opaque,
 ) void = {
-	const dnsreq = user: *dnsreq;
+	const dnsreq = user: *req;
 
 	match (result) {
 	case let z: size =>
@@ -317,10 +317,8 @@ fn on_tcp_read_resp(
 		return;
 	};
 
-	// Read more data from the socket
-	// TODO: https://todo.sr.ht/~sircmpwn/hare-ev/16
 	if (dnsreq.rbuf_valid < dnsreq.resp_len) {
-		ev::read(req, dnsreq.rbuf[dnsreq.rbuf_valid..], &on_tcp_read_resp);
+		ev::read(ioreq, dnsreq.rbuf[dnsreq.rbuf_valid..], &on_tcp_read_resp);
 		return;
 	};
 
@@ -334,8 +332,8 @@ fn on_tcp_read_resp(
 	query_complete(dnsreq, resp);
 };
 
-fn query_cancel(req: *ev::req) void = {
-	const req = req: *dnsreq;
+fn query_cancel(r: *ev::req) void = {
+	const req = r: *req;
 	ev::cancel(&req.r4);
 	ev::cancel(&req.r6);
 	ev::cancel(&req.connect);
@@ -353,7 +351,7 @@ fn query_cancel(req: *ev::req) void = {
 };
 
 fn query_complete(
-	req: *dnsreq,
+	req: *req,
 	outcome: (*dns::message | dns::error | nomem),
 ) void = {
 	ev::cancel(req);
@@ -369,7 +367,7 @@ fn query_complete(
 	};
 };
 
-fn on_timeout_expired(req: *ev::timer, user: nullable *opaque) void = {
-	const req = user: *dnsreq;
+fn on_timeout_expired(timer: *ev::timer, user: nullable *opaque) void = {
+	const req = user: *req;
 	query_complete(req, errors::timeout);
 };

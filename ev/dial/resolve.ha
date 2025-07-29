@@ -1,61 +1,91 @@
 use crypto::random;
+use edns = ev::dns;
 use errors;
 use ev;
-use edns = ev::dns;
+use io;
 use net;
-use net::ip;
 use net::dial;
 use net::dns;
+use net::ip;
 use unix::hosts;
+
+// TODO: ev::dial could maintain a pool of ev::dns::reqs (and their sockets)
+//
+// Or maybe ev::dns is better designed by adding a long-lived resolver which
+// processes req's like an ev::file would
 
 // Callback from a [[resolve]] operation.
 export type resolvecb = fn(
+	req: *resolver,
+	result: (([]ip::addr, u16) | error),
 	user: nullable *opaque,
-	r: (([]ip::addr, u16) | error),
 ) void;
 
-type resolve_state = struct {
-	user: nullable *opaque,
-	cb: *resolvecb,
-	r4: ev::req,
-	r6: ev::req,
-	nq: uint,
+export type resolver = struct {
+	ev::req,
+	nq: int,
+	qa: edns::req,
+	qaaaa: edns::req,
+	cb: nullable *resolvecb,
 	ip: []ip::addr,
 	port: u16,
 };
 
-// Performs DNS resolution on a given address string for a given service,
-// including /etc/hosts lookup and SRV resolution, and returns a list of
-// candidate IP addresses and the appropriate port, or an error, to the
+// An uninitialized [[resolver]] value. This can be used to statically
+// initialize [[resolver]] objects when [[resolver_init]] is not applicable,
+// for instance when storing an [[resolver]] in a global.
+export def RESOLVER_INIT = resolver {
+	qa = edns::REQ_INIT,
+	qaaaa = edns::REQ_INIT,
+	...
+};
+
+// Initializes a [[resolver]] for use with the given event loop, with an
+// optional user data pointer.
+//
+// Once submitted to the event loop, a request object is borrowed from the
+// caller and must remain stable until the request is cancelled or completed.
+export fn resolver_init(
+	loop: *ev::loop,
+	user: nullable *opaque,
+) resolver = {
+	return resolver {
+		loop = loop,
+		user = user,
+		qa = edns::REQ_INIT,
+		qaaaa = edns::REQ_INIT,
+		...
+	};
+};
+
+// Performs DNS resolution on an Internet address string for a given service,
+// including /etc/hosts lookup and SRV resolution if applicable, and returns a
+// list of candidate IP addresses and the appropriate port, or an error, to the
 // callback.
 //
-// The caller must free the [[net::ip::addr]] slice.
+// The [[net::ip::addr]] slice's lifetime is the duration of the callback. The
+// callback should duplicate this slice if the user needs to extend its
+// lifetime.
 export fn resolve(
-	loop: *ev::loop,
+	req: *resolver,
 	proto: str,
 	addr: str,
 	service: str,
 	cb: *resolvecb,
-	user: nullable *opaque = null
-) (ev::req | error) = {
-	// TODO: Reduce duplication with net::dial
-	let state = alloc(resolve_state {
-		cb = cb,
-		user = user,
-		...
-	})?;
+) (void | error) = {
+	req.cb = cb;
 
 	const (addr, port) = match (dial::splitaddr(addr, service)) {
 	case let svc: (str, u16) =>
 		yield svc;
 	case dial::invalid_address =>
-		resolve_finish(state, invalid_address);
-		return ev::req { ... };
+		resolve_finish(req, invalid_address);
+		return;
 	};
 
 	if (service == "unknown" && port == 0) {
-		resolve_finish(state, unknown_service);
-		return ev::req { ... };
+		resolve_finish(req, unknown_service);
+		return;
 	};
 
 	if (port == 0) {
@@ -71,8 +101,8 @@ export fn resolve(
 	// - Fetch the SRV record
 
 	if (port == 0) {
-		resolve_finish(state, unknown_service);
-		return ev::req { ... };
+		resolve_finish(req, unknown_service);
+		return;
 	};
 
 	match (ip::parse(addr)) {
@@ -80,10 +110,10 @@ export fn resolve(
 		let addrs: []ip::addr = [];
 		match (append(addrs, addr)) {
 		case void =>
-			resolve_finish(state, (addrs, port));
-			return ev::req { ... };
+			resolve_finish(req, (addrs, port));
+			return;
 		case nomem =>
-			resolve_finish(state, nomem);
+			resolve_finish(req, nomem);
 			return nomem;
 		};
 	case ip::invalid => yield;
@@ -93,23 +123,26 @@ export fn resolve(
 	case let addrs: []ip::addr =>
 		yield addrs;
 	case let e: hosts::error =>
-		resolve_finish(state, nomem);
-		return e;
+		resolve_finish(req, e);
+		return;
 	};
 	if (len(addrs) != 0) {
-		resolve_finish(state, (addrs, port));
-		return ev::req { ... };
+		resolve_finish(req, (addrs, port));
+		return;
 	};
 
-	state.port = port;
-	return resolve_dns(state, loop, addr);
+	req.port = port;
+	return resolve_dns(req, addr);
 };
 
 fn resolve_dns(
-	state: *resolve_state,
-	loop: *ev::loop,
+	req: *resolver,
 	addr: str,
-) (ev::req | error) = {
+) (void | error) = {
+	req.cancel = &resolve_cancel;
+	req.qa = edns::req_init(req.loop as *ev::loop, req)?;
+	req.qaaaa = edns::req_init(req.loop as *ev::loop, req)?;
+
 	const domain = dns::parse_domain(addr)?;
 	defer free(domain);
 
@@ -117,6 +150,27 @@ fn resolve_dns(
 	random::buffer(rand);
 	let id = *(&rand[0]: *u16);
 
+	const query4 = dns::message {
+		header = dns::header {
+			id = id,
+			op = dns::op {
+				qr = dns::qr::QUERY,
+				opcode = dns::opcode::QUERY,
+				rd = true,
+				...
+			},
+			qdcount = 1,
+			...
+		},
+		questions = [
+			dns::question {
+				qname = domain,
+				qtype = dns::qtype::A,
+				qclass = dns::qclass::IN,
+			},
+		],
+		...
+	};
 	const query6 = dns::message {
 		header = dns::header {
 			id = id,
@@ -138,112 +192,70 @@ fn resolve_dns(
 		],
 		...
 	};
-	const query4 = dns::message {
-		header = dns::header {
-			id = id + 1,
-			op = dns::op {
-				qr = dns::qr::QUERY,
-				opcode = dns::opcode::QUERY,
-				rd = true,
-				...
-			},
-			qdcount = 1,
-			...
-		},
-		questions = [
-			dns::question {
-				qname = domain,
-				qtype = dns::qtype::A,
-				qclass = dns::qclass::IN,
-			},
-		],
-		...
-	};
 
 	let ok = false;
-	state.r6 = edns::query(loop, &query6, &query_cb_v6, state)?;
-	defer if(!ok) ev::cancel(&state.r6);
-	state.r4 = edns::query(loop, &query4, &query_cb_v4, state)?;
+	edns::query(&req.qaaaa, &query6, &on_dns_response)?;
+	defer if (!ok) ev::cancel(&req.qaaaa);
+
+	edns::query(&req.qa, &query4, &on_dns_response)?;
 	ok = true;
-	return ev::mkreq(null, &resolve_cancel, state);
 };
 
-fn resolve_finish(st: *resolve_state, r: (([]ip::addr, u16) | error)) void = {
-	const user = st.user;
-	const cb = st.cb;
-	if (r is error) {
-		free(st.ip);
+fn on_dns_response(
+	dnsreq: *edns::req,
+	result: (*dns::message | dns::error | nomem),
+	user: nullable *opaque,
+) void = {
+	let req = user: *resolver;
+
+	match (result) {
+	case let err: dns::error =>
+		resolve_finish(req, err);
+		return;
+	case nomem =>
+		resolve_finish(req, nomem);
+		return;
+	case let msg: *dns::message =>
+		match (collect_answers(&req.ip, &msg.answers)) {
+		case void => void;
+		case nomem =>
+			resolve_finish(req, nomem);
+			return;
+		};
+		req.nq += 1;
 	};
-	free(st);
-	cb(user, r);
+
+	if (req.nq < 2) {
+		// Wait for the other query to finish
+		return;
+	};
+
+	resolve_finish(req, (req.ip, req.port));
+};
+
+fn resolve_finish(
+	req: *resolver,
+	result: (([]ip::addr, u16) | error),
+) void = {
+	const ip = req.ip;
+	defer free(ip);
+	req.ip = [];
+
+	ev::cancel(&req.qa);
+	ev::cancel(&req.qaaaa);
+
+	const cb = req.cb as *resolvecb;
+	req.cb = null;
+
+	cb(req, result, req.user);
 };
 
 fn resolve_cancel(req: *ev::req) void = {
-	const state = req.user: *resolve_state;
-	ev::cancel(&state.r4);
-	ev::cancel(&state.r6);
-	free(state.ip);
-	free(state);
-};
-
-fn query_cb_v4(user: nullable *opaque, r: (*dns::message | dns::error | nomem)) void = {
-	let state = user: *resolve_state;
-	state.r4 = ev::req { ... };
-
-	match (r) {
-	case let err: dns::error =>
-		ev::cancel(&state.r6);
-		resolve_finish(state, err);
-		return;
-	case nomem =>
-		ev::cancel(&state.r6);
-		resolve_finish(state, nomem);
-		return;
-	case let msg: *dns::message =>
-		match (collect_answers(&state.ip, &msg.answers)) {
-		case void => void;
-		case nomem =>
-			ev::cancel(&state.r6);
-			resolve_finish(state, nomem);
-			return;
-		};
-		state.nq += 1;
-	};
-
-	if (state.nq < 2) {
-		return;
-	};
-	resolve_finish(state, (state.ip, state.port));
-};
-
-fn query_cb_v6(user: nullable *opaque, r: (*dns::message | dns::error | nomem)) void = {
-	let state = user: *resolve_state;
-	state.r6 = ev::req { ... };
-
-	match (r) {
-	case let err: dns::error =>
-		ev::cancel(&state.r4);
-		resolve_finish(state, err);
-		return;
-	case nomem =>
-		ev::cancel(&state.r4);
-		resolve_finish(state, nomem);
-		return;
-	case let msg: *dns::message =>
-		match (collect_answers(&state.ip, &msg.answers)) {
-		case void => void;
-		case nomem =>
-			ev::cancel(&state.r4);
-			resolve_finish(state, nomem);
-			return;
-		};
-		state.nq += 1;
-	};
-
-	if (state.nq < 2) {
-		return;
-	};
-	resolve_finish(state, (state.ip, state.port));
+	const req = req: *resolver;
+	ev::cancel(&req.qa);
+	ev::cancel(&req.qaaaa);
+	free(req.ip);
+	req.ip = [];
 };
 
 fn collect_answers(addrs: *[]ip::addr, answers: *[]dns::rrecord) (void | nomem) = {

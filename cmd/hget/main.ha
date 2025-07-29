@@ -12,6 +12,7 @@ type state = struct {
 	uri: *uri::uri,
 	exit: int,
 	buf: [os::BUFSZ]u8,
+	ioreq: ev::ioreq,
 };
 
 export fn main() void = {
@@ -26,31 +27,34 @@ export fn main() void = {
 		exit = os::status::SUCCESS,
 		uri = &uri,
 		buf = [0...],
+		ioreq = ev::IOREQ_INIT,
 	};
 
-	dial::dial_uri(&loop, "tcp", &uri, &dialcb, &state)!;
+	let req = dial::dialreq_init(&loop, &state);
+	match (dial::dial_uri(&req, "tcp", &uri, &on_connected)) {
+	case let err: dial::error =>
+		fmt::fatal(dial::strerror(err));
+	case void => void;
+	};
 
-	for (ev::dispatch(&loop, -1)!) void;
-
+	ev::run(&loop)!;
 	os::exit(state.exit);
 };
 
-fn error(state: *state, details: str) void = {
-	fmt::errorfln("Error: {}", details)!;
-	state.exit = os::status::FAILURE;
-	ev::stop(state.loop);
-};
-
-fn dialcb(user: nullable *opaque, r: (*ev::file | dial::error)) void = {
+fn on_connected(
+	req: *dial::dialreq,
+	r: (*ev::file | dial::error),
+	user: nullable *opaque,
+) void = {
 	let state = user: *state;
 	const file = match (r) {
 	case let file: *ev::file =>
 		yield file;
 	case let err: dial::error =>
-		error(state, dial::strerror(err));
+		fmt::errorln(dial::strerror(err))!;
 		return;
 	};
-	ev::setuser(file, state);
+
 	const s = fmt::bsprintf(state.buf, "GET {} HTTP/1.1\r\n"
 		"Host: {}\r\n"
 		"Connection: close\r\n\r\n",
@@ -62,33 +66,42 @@ fn dialcb(user: nullable *opaque, r: (*ev::file | dial::error)) void = {
 			yield ip::string(ip);
 		})!;
 
-	ev::write(file, &writecb, state.buf[..len(s)]);
+	state.ioreq = ev::ioreq_init(file, state);
+	ev::write(&state.ioreq, state.buf[..len(s)], &on_write);
 };
 
-fn writecb(file: *ev::file, r: (size | io::error)) void = {
-	const state = ev::getuser(file): *state;
-	const z = match (r) {
-	case let z: size =>
-		yield z;
+fn on_write(
+	req: *ev::ioreq,
+	r: (size | io::error),
+	user: nullable *opaque,
+) void = {
+	const state = user: *state;
+
+	match (r) {
 	case let err: io::error =>
-		error(state, io::strerror(err));
+		fmt::errorln(io::strerror(err))!;
 		return;
+	case size => void;
 	};
-	ev::read(file, &readcb, state.buf);
+
+	ev::read(&state.ioreq, state.buf, &on_read);
 };
 
-fn readcb(file: *ev::file, r: (size | io::EOF | io::error)) void = {
-	const state = ev::getuser(file): *state;
-	const z = match (r) {
-	case let z: size =>
-		yield z;
+fn on_read(
+	req: *ev::ioreq,
+	r: (size | io::EOF | io::error),
+	user: nullable *opaque,
+) void = {
+	const state = user: *state;
+	const n = match (r) {
+	case let n: size =>
+		yield n;
 	case io::EOF =>
-		ev::stop(state.loop);
 		return;
 	case let err: io::error =>
-		error(state, io::strerror(err));
+		fmt::errorln(io::strerror(err))!;
 		return;
 	};
-	io::writeall(os::stdout, state.buf[..z])!;
-	ev::read(file, &readcb, state.buf);
+	io::writeall(os::stdout, state.buf[..n])!;
+	ev::read(req, state.buf, &on_read);
 };
