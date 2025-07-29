@@ -1,15 +1,44 @@
+// A request is used to store state associated with an I/O request. Users should
+// not directly access any fields of any [[req]] unless they are creating
+// subtypes of [[req]].
+//
+// This type is subtyped by various kinds of requests, such as [[ioreq]] or
+// [[timer]], and may be subtyped by downstream users to provide request objects
+// for their own high-level operations, with a user data pointer and
+// cancellation semantics.
+//
+// Note that request objects are generally assumed to already be availble for
+// reuse during the user callback. Therefore, if the downstream request
+// implementation has a cleanup step following the callback, they should take
+// care not to treat any state stored on the request object as valid during this
+// step.
 export type req = struct {
+	// Cancellation function. [[cancel]] sets this field to null for
+	// idempotency; therefore the field must be populated again each time
+	// the request is submitted.
 	cancel: nullable *cancelfn,
+	// User data object
 	user: nullable *opaque,
-	link: req_list,
-	// This is almost always a file pointer, but certain requests which are
-	// initiated without a file, like [[connect_tcp]], will briefly store
-	// the event loop reference here instead.
+
+	// A request can either be associated with an event [[loop]] or a
+	// [[file]] (and via the file, indirectly, an event loop).
+	//
+	// Internally, most [[ev::]] requests are associated with files. Some
+	// requests, such as [[connect_tcp]], are briefly associated with a loop
+	// before the socket is created, after which they are associated with
+	// that file instead.
 	union {
-		file: nullable *file,
 		loop: nullable *loop,
+		file: nullable *file,
 	},
+
+	// Linked list of requests for internal use
+	link: req_list,
 };
+
+// TODO: Add file_req type and subtype it for e.g. [[ioreq]]? And then we can
+// move the req_list into file_req and avoid storing it for requests that don't
+// care for it.
 
 export type req_list = struct {
 	union {
@@ -22,11 +51,6 @@ export type req_list = struct {
 	},
 };
 
-// Returns the [[file]] associated with a [[req]]uest, if any.
-export fn req_getfile(req: *req) nullable *file = {
-	return req.file;
-};
-
 // Returns the user data associated with a [[req]]uest, if any.
 export fn req_getuser(req: *req) nullable *opaque = {
 	return req.user;
@@ -35,6 +59,10 @@ export fn req_getuser(req: *req) nullable *opaque = {
 // Sets the user data associated with a [[req]]uest.
 export fn req_setuser(req: *req, user: nullable *opaque) void = {
 	req.user = user;
+};
+
+fn req_getfile(req: *req) nullable *file = {
+	return req.file;
 };
 
 // A function which cancels an in-flight request.

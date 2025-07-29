@@ -7,32 +7,45 @@ use net::dns;
 use net::ip;
 use net::udp;
 use time;
+use time::{clock};
 use types;
 use unix::resolvconf;
 
-// TODO: Let users customize this?
-def TIMEOUT: time::duration = 3 * time::SECOND;
-
 // Callback for a [[query]] operation.
 export type querycb = fn(
-	user: nullable *opaque,
+	req: *dnsreq,
 	r: (*dns::message | dns::error | nomem),
+	user: nullable *opaque,
 ) void;
 
-type qstate = struct {
-	// Event loop objects
-	loop: *ev::loop,
-	socket4: *ev::file,
-	socket6: *ev::file,
-	r4: ev::req,
-	r6: ev::req,
-	timer: *ev::file,
+export type dnsreq = struct {
+	ev::req,
 
-	// Request ID
-	rid: u16,
+	// UDP state
+	s4: nullable *ev::file,
+	s6: nullable *ev::file,
+	r4: ev::dgramreq,
+	r6: ev::dgramreq,
 
-	// Outgoing DNS request
-	query: [512]u8,
+	// TCP state
+	tcpsock: nullable *ev::file,
+	connect: ev::sockreq,
+	read: ev::ioreq,
+	read_vector: [2]io::vector,
+
+	// Timeout
+	timer: ev::timer,
+	timeout: time::duration,
+
+	union {
+		// Request ID
+		rid: u16,
+		// Response length
+		resp_len: u16,
+	},
+
+	// Outgoing DNS query
+	qbuf: []u8,
 	qlen: u16,
 
 	// Response buffer
@@ -42,21 +55,80 @@ type qstate = struct {
 	// Length buffer
 	zbuf: [2]u8,
 
-	// Callback and user data
-	cb: *querycb,
-	user: nullable *opaque,
+	// Callback
+	cb: nullable *querycb,
+};
+
+export def DNSREQ_INIT = dnsreq {
+	r4 = ev::DGRAMREQ_INIT,
+	r6 = ev::DGRAMREQ_INIT,
+	timer = ev::TIMER_INIT,
+	connect = ev::SOCKREQ_INIT,
+	read = ev::IOREQ_INIT,
+	...
+};
+
+// Initializes a new [[dnsreq]] for use with [[query]]. This function allocates
+// memory and binds a UDP socket for the lifetime of the [[dnsreq]] object,
+// which must be disposed of with [[dnsreq_finish]].
+//
+// Only one [[query]] may be performed at a time per [[dnsreq]]. In order to run
+// multiple DNS queries in parallel, one must use multiple [[dnsreq]] objects.
+// Once a DNS query completes (when its callback is run) or is cancelled (via
+// [[ev::cancel]]), the [[dnsreq]] object may be reused.
+export fn dnsreq_init(
+	loop: *ev::loop,
+	user: nullable *opaque = null,
+	timeout: time::duration = 3 * time::SECOND,
+) (dnsreq | net::error | errors::error | nomem) = {
+	let req = DNSREQ_INIT;
+	let ok = false;
+	defer if (!ok) dnsreq_finish(&req);
+	req.loop = loop;
+	req.s4 = ev::listen_udp(loop, ip::ANY_V4, 0)?;
+	req.s6 = ev::listen_udp(loop, ip::ANY_V6, 0)?;
+	req.timer = ev::timer_init(loop, clock::MONOTONIC, &on_timeout_expired)?;
+	req.timeout = timeout;
+	req.qbuf = alloc([0...], 512)?;
+	req.rbuf = alloc([0...], 512)?;
+	req.user = user;
+	ok = true;
+	return req;
+};
+
+// Disposes of resources associated with a [[dnsreq]].
+export fn dnsreq_finish(req: *dnsreq) void = {
+	ev::cancel(&req.r4);
+	ev::cancel(&req.r6);
+	ev::timer_finish(&req.timer);
+
+	match (req.s4) {
+	case let sock: *ev::file =>
+		ev::close(sock);
+		req.s4 = null;
+	case null => void;
+	};
+
+	match (req.s6) {
+	case let sock: *ev::file =>
+		ev::close(sock);
+		req.s6 = null;
+	case null => void;
+	};
+
+	free(req.qbuf);
+	free(req.rbuf);
 };
 
 // Performs a DNS query against the provided set of DNS servers, or the list of
 // servers from /etc/resolv.conf if none are specified. The DNS message passed
 // to the callback is only valid for the duration of the callback.
 export fn query(
-	loop: *ev::loop,
+	req: *dnsreq,
 	query: *dns::message,
 	cb: *querycb,
-	user: nullable *opaque,
 	servers: ip::addr...
-) (ev::req | nomem | dns::error | net::error | errors::error) = {
+) (void | nomem | dns::error | net::error) = {
 	if (len(servers) == 0) {
 		const rconf = resolvconf::load();
 		servers = rconf.nameservers;
@@ -66,254 +138,251 @@ export fn query(
 		servers = [ip::LOCAL_V6, ip::LOCAL_V4];
 	};
 
-	let stateok = false;
-	const socket4 = ev::listen_udp(loop, ip::ANY_V4, 0)?;
-	defer if (!stateok) ev::close(socket4);
-	const socket6 = ev::listen_udp(loop, ip::ANY_V6, 0)?;
-	defer if (!stateok) ev::close(socket6);
+	assert(req.cb == null, "Cannot reuse in-flight dnsreq");
+	assert(req.s4 != null, "Attempted DNS query with uninitialized dnsreq");
+	const s4 = req.s4 as *ev::file;
+	const s6 = req.s6 as *ev::file;
 
-	const timeout = ev::newtimer(loop, &timeoutcb, time::clock::MONOTONIC)?;
-	defer if (!stateok) ev::close(timeout);
+	req.qlen = dns::encode(req.qbuf, query)?: u16;
+	req.rid = query.header.id;
+	req.cancel = &query_cancel;
+	req.cb = cb;
 
-	let rbuf: []u8 = alloc([0...], 512)?;
-	defer if (!stateok) free(rbuf);
+	req.r4 = ev::dgramreq_init(s4, req);
+	req.r6 = ev::dgramreq_init(s6, req);
+	req.connect = ev::connect_init(req.loop as *ev::loop, req);
 
-	let state = alloc(qstate {
-		loop = loop,
-		socket4 = socket4,
-		socket6 = socket6,
-		timer = timeout,
-		rid = query.header.id,
-		cb = cb,
-		rbuf = rbuf,
-		user = user,
-		...
-	})?;
-	defer if (!stateok) free(state);
-
-	state.qlen = dns::encode(state.query, query)?: u16;
-	ev::setuser(socket4, state);
-	ev::setuser(socket6, state);
-	ev::setuser(timeout, state);
-	ev::timer_configure(timeout, TIMEOUT, 0);
+	ev::req_setuser(&req.timer, req);
+	ev::timer_configure(&req.timer, req.timeout, 0);
 
 	// Note: the initial set of requests is sent directly through net::udp
 	// as it is assumed they can fit into the kernel's internal send buffer
 	// and will finish without blocking
-	const buf = state.query[..state.qlen];
+	const buf = req.qbuf[..req.qlen];
 	for (const server .. servers) {
 		match (server) {
 		case ip::addr4 =>
-			udp::sendto(ev::getfd(socket4), buf, server, 53)?;
+			udp::sendto(ev::getfd(s4), buf, server, 53)?;
 		case ip::addr6 =>
-			udp::sendto(ev::getfd(socket6), buf, server, 53)?;
+			udp::sendto(ev::getfd(s6), buf, server, 53)?;
 		};
 	};
 
-	state.r4 = ev::recvfrom(socket4, &qrecvcb, state.rbuf);
-	state.r6 = ev::recvfrom(socket6, &qrecvcb, state.rbuf);
-	stateok = true;
-	return ev::mkreq(null, &query_cancel, state);
+	ev::recvfrom(&req.r4, req.rbuf, &on_recvfrom);
+	ev::recvfrom(&req.r6, req.rbuf, &on_recvfrom);
 };
 
-fn query_cancel(req: *ev::req) void = {
-	const q = req.user: *qstate;
-	query_destroy(q);
-};
-
-fn query_destroy(q: *qstate) void = {
-	ev::cancel(&q.r4);
-	ev::cancel(&q.r6);
-	ev::close(q.socket4);
-	ev::close(q.socket6);
-	ev::close(q.timer);
-	free(q.rbuf);
-	free(q);
-};
-
-fn query_complete(q: *qstate, r: (*dns::message | dns::error | nomem)) void = {
-	const cb = q.cb;
-	const user = q.user;
-	cb(user, r);
-	match (r) {
-	case let msg: *dns::message =>
-		dns::message_free(msg);
-	case => void;
-	};
-	query_destroy(q);
-};
-
-fn timeoutcb(file: *ev::file) void = {
-	const q = ev::getuser(file): *qstate;
-	query_complete(q, errors::timeout);
-};
-
-fn qrecvcb(file: *ev::file, r: ((size, ip::addr, u16) | net::error)) void = {
-	const q = ev::getuser(file): *qstate;
-	match (qrecv(q, file, r)) {
-	case void => void;
-	case let r: (*dns::message | dns::error) =>
-		query_complete(q, r);
-	};
-};
-
-fn qrecv(
-	q: *qstate,
-	file: *ev::file,
+fn on_recvfrom(
+	req: *ev::dgramreq,
 	r: ((size, ip::addr, u16) | net::error),
-) (*dns::message | dns::error | void) = {
-	let req: *ev::req = if (file == q.socket4) &q.r4 else &q.r6;
-	*req = ev::req { ... };
+	user: nullable *opaque,
+) void = {
+	const dnsreq = user: *dnsreq;
+	match (post_recv(req, dnsreq, r)) {
+	case let result: (*dns::message | dns::error) =>
+		query_complete(dnsreq, result);
+	case errors::again =>
+		// Wait for the next response in case this one was not suitable
+		ev::recvfrom(req, dnsreq.rbuf, &on_recvfrom);
+	case void => void;
+	};
+};
 
+fn post_recv(
+	udpreq: *ev::dgramreq,
+	dnsreq: *dnsreq,
+	r: ((size, ip::addr, u16) | net::error),
+) (*dns::message | dns::error | errors::again | void) = {
 	const (z, addr, port) = match (r) {
 	case let r: (size, ip::addr, u16) =>
 		yield r;
 	case let err: net::error =>
-		query_complete(q, err);
-		return;
+		return err;
 	};
 
-	const resp = match (dns::decode(q.rbuf[..z])) {
+	const resp = match (dns::decode(dnsreq.rbuf[..z])) {
 	case dns::format =>
-		*req = ev::recvfrom(file, &qrecvcb, q.rbuf);
-		return;
+		return errors::again;
 	case let msg: *dns::message =>
 		yield msg;
 	};
 
-	if (resp.header.id != q.rid || resp.header.op.qr != dns::qr::RESPONSE) {
-		*req = ev::recvfrom(file, &qrecvcb, q.rbuf);
+	const header = &resp.header;
+	if (header.id != dnsreq.rid || header.op.qr != dns::qr::RESPONSE) {
 		dns::message_free(resp);
-		return;
+		return errors::again;
 	};
 
-	if (!resp.header.op.tc) {
+	if (!header.op.tc) {
 		return resp;
 	};
 
+	// Reponse truncated, retry over TCP
 	dns::message_free(resp);
 
-	// Reponse truncated, retry over TCP
-	//
-	// Note that when we switch to TCP, we only use the r4 field for
-	// in-flight requests (even if we're using IPv6), and likewise once the
-	// TCP connection is estabilshed the UDP socket at socket4 is closed and
-	// replaced with the TCP socket (regardless of domain).
+	// Cancel UDP requests
+	ev::cancel(&dnsreq.r4);
+	ev::cancel(&dnsreq.r6);
 
-	// Cancel in-flight UDP queries
-	ev::cancel(&q.r4);
-	ev::cancel(&q.r6);
+	dnsreq.rbuf_valid = 0;
 
-	match (ev::connect_tcp(q.loop, &qconnected, addr, 53, q)) {
-	case let req: ev::req =>
-		q.r4 = req;
+	match (ev::connect_tcp(&dnsreq.connect, addr, 53, &on_tcp_connected)) {
 	case let err: net::error =>
 		return err;
 	case let err: errors::error =>
 		return err: net::error;
+	case void => void;
 	};
 };
 
-fn qconnected(result: (*ev::file | net::error), user: nullable *opaque) void = {
-	const q = user: *qstate;
-	q.r4 = ev::req { ... };
+fn on_tcp_connected(
+	req: *ev::sockreq,
+	result: (*ev::file | net::error),
+	user: nullable *opaque,
+) void = {
+	const dnsreq = user: *dnsreq;
 	const sock = match (result) {
 	case let file: *ev::file =>
 		yield file;
 	case let err: net::error =>
-		query_complete(q, err);
+		query_complete(dnsreq, err);
 		return;
 	};
 
-	ev::close(q.socket4);
-	q.socket4 = sock;
+	dnsreq.tcpsock = sock;
+	dnsreq.read = ev::ioreq_init(sock, dnsreq);
 
-	endian::beputu16(q.zbuf, q.qlen);
-
-	q.r4 = ev::writev(sock,
-		&qtcp_write_cb,
-		io::mkvector(q.zbuf),
-		io::mkvector(q.query[..q.qlen]));
+	endian::beputu16(dnsreq.zbuf, dnsreq.qlen);
+	dnsreq.read_vector = [
+		io::mkvector(dnsreq.zbuf),
+		io::mkvector(dnsreq.qbuf[..dnsreq.qlen]),
+	];
+	ev::writev(&dnsreq.read, dnsreq.read_vector, &on_tcp_write);
 };
 
-fn qtcp_write_cb(file: *ev::file, result: (size | io::error)) void = {
-	const q = ev::getuser(file): *qstate;
-	q.r4 = ev::req { ... };
+fn on_tcp_write(
+	req: *ev::ioreq,
+	result: (size | io::error),
+	user: nullable *opaque,
+) void = {
+	const dnsreq = user: *dnsreq;
+
 	match (result) {
 	case let z: size =>
-		// XXX: some (stupid) configurations may have a TCP buffer less
-		// than 514 bytes, which we might want to handle, but generally
-		// the request should make it to the TCP buffer in a single
-		// writev call.
-		assert(z: u16 == q.qlen + 2);
+		// TODO: https://todo.sr.ht/~sircmpwn/hare-ev/16
+		assert(z: u16 == dnsreq.qlen + 2);
 	case let err: io::error =>
-		query_complete(q, err);
+		query_complete(dnsreq, err);
+		return;
 	};
 
-	q.r4 = ev::read(file, &qtcp_readlength_cb, q.zbuf);
+	ev::read(req, dnsreq.zbuf, &on_tcp_read_length);
 };
 
-fn qtcp_readlength_cb(
-	file: *ev::file,
+fn on_tcp_read_length(
+	req: *ev::ioreq,
 	result: (size | io::EOF | io::error),
+	user: nullable *opaque,
 ) void = {
-	const q = ev::getuser(file): *qstate;
+	const dnsreq = user: *dnsreq;
+
 	match (result) {
-	case let z: size =>
-		if (z != 2) {
-			query_complete(q, dns::format);
-			return;
-		};
+	case size => void;
 	case let err: io::error =>
-		query_complete(q, err);
+		query_complete(dnsreq, err);
 		return;
 	case io::EOF =>
-		query_complete(q, dns::format);
+		query_complete(dnsreq, dns::format);
 		return;
 	};
 
-	const rlen = endian::begetu16(q.zbuf);
-	q.rid = rlen;
-	q.rbuf = match (alloc([0u8...], rlen)) {
-	case let rbuf: []u8 =>
-		yield rbuf;
-	case nomem =>
-		query_complete(q, nomem);
-		return;
+	const resp_len = endian::begetu16(dnsreq.zbuf);
+	dnsreq.resp_len = resp_len;
+
+	if (len(dnsreq.rbuf) < resp_len) {
+		match (append(dnsreq.rbuf, [0...], resp_len - len(dnsreq.rbuf))) {
+		case nomem =>
+			query_complete(dnsreq, nomem);
+			return;
+		case void => void;
+		};
 	};
-	q.r4 = ev::read(file, &qtcp_readdata_cb, q.rbuf);
+
+	ev::read(req, dnsreq.rbuf, &on_tcp_read_resp);
 };
 
-fn qtcp_readdata_cb(
-	file: *ev::file,
+fn on_tcp_read_resp(
+	req: *ev::ioreq,
 	result: (size | io::EOF | io::error),
+	user: nullable *opaque,
 ) void = {
-	const q = ev::getuser(file): *qstate;
-	q.r4 = ev::req { ... };
+	const dnsreq = user: *dnsreq;
+
 	match (result) {
 	case let z: size =>
 		const rlen = z: u16;
-		if (q.rbuf_valid + rlen > q.rid) {
-			query_complete(q, dns::format);
+		if (dnsreq.rbuf_valid + rlen > dnsreq.resp_len) {
+			query_complete(dnsreq, dns::format);
 			return;
 		};
-		q.rbuf_valid += rlen;
+		dnsreq.rbuf_valid += rlen;
 	case io::EOF =>
 		return;
 	};
 
-	if (q.rbuf_valid < q.rid) {
-		// Read more data from the socket
-		q.r4 = ev::read(file, &qtcp_readdata_cb, q.rbuf[q.rbuf_valid..]);
+	// Read more data from the socket
+	// TODO: https://todo.sr.ht/~sircmpwn/hare-ev/16
+	if (dnsreq.rbuf_valid < dnsreq.resp_len) {
+		ev::read(req, dnsreq.rbuf[dnsreq.rbuf_valid..], &on_tcp_read_resp);
 		return;
 	};
 
-	const resp = match (dns::decode(q.rbuf[..q.rbuf_valid])) {
+	const resp = match (dns::decode(dnsreq.rbuf[..dnsreq.rbuf_valid])) {
 	case dns::format =>
-		query_complete(q, dns::format);
+		query_complete(dnsreq, dns::format);
 		return;
 	case let msg: *dns::message =>
 		yield msg;
 	};
-	query_complete(q, resp);
+	query_complete(dnsreq, resp);
+};
+
+fn query_cancel(req: *ev::req) void = {
+	const req = req: *dnsreq;
+	ev::cancel(&req.r4);
+	ev::cancel(&req.r6);
+	ev::cancel(&req.connect);
+	ev::cancel(&req.read);
+	ev::cancel(&req.timer);
+
+	// TODO: Reuse the TCP socket
+	// https://todo.sr.ht/~sircmpwn/hare/969
+	match (req.tcpsock) {
+	case let sock: *ev::file =>
+		ev::close(sock);
+		req.tcpsock = null;
+	case null => void;
+	};
+};
+
+fn query_complete(
+	req: *dnsreq,
+	outcome: (*dns::message | dns::error | nomem),
+) void = {
+	ev::cancel(req);
+
+	const cb = req.cb as *querycb;
+	req.cb = null;
+	cb(req, outcome, req.user);
+
+	match (outcome) {
+	case let msg: *dns::message =>
+		dns::message_free(msg);
+	case => void;
+	};
+};
+
+fn on_timeout_expired(req: *ev::timer, user: nullable *opaque) void = {
+	const req = user: *dnsreq;
+	query_complete(req, errors::timeout);
 };
