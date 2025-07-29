@@ -1,11 +1,14 @@
 export type req = struct {
+	cancel: nullable *cancelfn,
+	user: nullable *opaque,
+	link: req_list,
+	// This is almost always a file pointer, but certain requests which are
+	// initiated without a file, like [[connect_tcp]], will briefly store
+	// the event loop reference here instead.
 	union {
 		file: nullable *file,
 		loop: nullable *loop,
 	},
-	cancel: nullable *cancelfn,
-	user: nullable *opaque,
-	link: req_list,
 };
 
 export type req_list = struct {
@@ -85,18 +88,4 @@ fn req_unlink(list: *req_list, link: *req_list) void = {
 
 fn req_list_empty(list: *req_list) bool = {
 	return list.head == null;
-};
-
-// Makes a new request object.
-export fn mkreq(
-	file: nullable *file,
-	cancel: *cancelfn,
-	user: nullable *opaque = null,
-) req = {
-	return req {
-		file = file,
-		cancel = cancel,
-		user = user,
-		link = req_list { ... },
-	};
 };

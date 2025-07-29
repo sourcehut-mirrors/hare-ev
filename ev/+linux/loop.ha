@@ -94,26 +94,13 @@ export fn do(
 	loop: *loop,
 	cb: *dispatchcb,
 	user: nullable *opaque = null,
-) (req | nomem) = {
+) (void | nomem) = {
 	const dispatch = alloc(ondispatch {
 		cb = cb,
 		user = user,
 		loop = loop,
 	})?;
 	append(loop.dispatch, dispatch)?;
-	return mkreq(null, &do_cancel, dispatch);
-};
-
-fn do_cancel(req: *req) void = {
-	const dispatch = req.user: *ondispatch;
-	const loop = dispatch.loop;
-	for (let i = 0z; i < len(loop.dispatch); i += 1) {
-		if (loop.dispatch[i] == dispatch) {
-			delete(loop.dispatch[i]);
-			break;
-		};
-	};
-	free(dispatch);
 };
 
 fn close_files(loop: *loop) void = {
