@@ -96,7 +96,6 @@ export fn handle(
 	const file = file_req_init(req, &signal_cancel);
 	req.cb = cb;
 	file.signal = req;
-	file.ev.nrequest += 1;
 	signal_arm(req);
 };
 
