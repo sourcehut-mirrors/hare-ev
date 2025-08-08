@@ -108,6 +108,7 @@ export fn resolve(
 	match (ip::parse(addr)) {
 	case let addr: ip::addr =>
 		let addrs: []ip::addr = [];
+		defer free(addrs);
 		match (append(addrs, addr)) {
 		case void =>
 			resolve_finish(req, (addrs, port));
@@ -126,6 +127,7 @@ export fn resolve(
 		resolve_finish(req, e);
 		return;
 	};
+	defer free(addrs);
 	if (len(addrs) != 0) {
 		resolve_finish(req, (addrs, port));
 		return;
