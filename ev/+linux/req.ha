@@ -73,10 +73,10 @@ export type cancelfn = fn(req: *req) void;
 export fn cancel(req: *req) void = {
 	match (req.cancel) {
 	case let cancel: *cancelfn =>
+		req.cancel = null;
 		cancel(req);
 	case null => yield;
 	};
-	req.cancel = null;
 };
 
 fn req_link(list: *req_list, link: *req_list) void = {
