@@ -243,8 +243,8 @@ fn resolve_finish(
 	defer free(ip);
 	req.ip = [];
 
-	ev::cancel(&req.qa);
-	ev::cancel(&req.qaaaa);
+	edns::req_finish(&req.qa);
+	edns::req_finish(&req.qaaaa);
 
 	const cb = req.cb as *resolvecb;
 	req.cb = null;
@@ -254,8 +254,8 @@ fn resolve_finish(
 
 fn resolve_cancel(req: *ev::req) void = {
 	const req = req: *resolver;
-	ev::cancel(&req.qa);
-	ev::cancel(&req.qaaaa);
+	edns::req_finish(&req.qa);
+	edns::req_finish(&req.qaaaa);
 	free(req.ip);
 	req.ip = [];
 };
