@@ -75,6 +75,10 @@ export fn newloop(events: size = 256) (loop | nomem | errors::error) = {
 // the event loop.
 export fn finish(loop: *loop) void = {
 	free(loop.events);
+	for (let dispatch .. loop.dispatch) {
+		free(dispatch);
+	};
+	free(loop.dispatch);
 	io::close(loop.fd)!;
 };
 
