@@ -116,8 +116,12 @@ fn proc_closeq(loop: *loop) void = {
 
 fn proc_blockq(loop: *loop) size = {
 	let nevent = 0z;
-	for (loop.blockq.tail != null) {
-		const link = loop.blockq.tail: *file_list;
+
+	let cur = loop.blockq.tail;
+	for (cur != null) {
+		const link = cur: *file_list;
+		const next = link.next;
+
 		const file = file_list_get_file(link);
 		assert(file.flags & fflags::BLOCKING != 0);
 
@@ -139,7 +143,10 @@ fn proc_blockq(loop: *loop) size = {
 			writable_ready(file);
 		case => void;
 		};
+
+		cur = next;
 	};
+
 	return nevent;
 };
 
