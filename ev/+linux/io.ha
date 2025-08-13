@@ -71,29 +71,17 @@ export fn readv(
 	const file = file_req_init(req, &readv_cancel);
 	req.vec = vec;
 	req.readcb = cb;
-
-	if (file.flags & fflags::BLOCKING != 0) {
-		const r = io::readv(file.fd, vec...);
-		file_req_finish(req, &file.readq);
-		cb(req, r, req.user);
-		return;
-	};
-
 	file_begin(file, req, op::READV);
 };
 
-fn readv_ready(file: *file, ev: *rt::epoll_event) void = {
+fn readv_ready(file: *file) void = {
 	assert(file.op & op::READ_MASK == op::READV);
 	let req = file_get_request(&file.readq): *ioreq;
 	file_req_finish(req, &file.readq);
 
 	const cb = req.readcb as *readcb;
-	if (ev.events & rt::EPOLLHUP != 0) {
-		cb(req, io::EOF, req.user);
-	} else {
-		const r = io::readv(file.fd, req.vec...);
-		cb(req, r, req.user);
-	};
+	const r = io::readv(file.fd, req.vec...);
+	cb(req, r, req.user);
 
 	file_end(file, op::READV);
 };
@@ -147,7 +135,7 @@ export fn writev(
 	file_begin(file, req, op::WRITEV);
 };
 
-fn writev_ready(file: *file, ev: *rt::epoll_event) void = {
+fn writev_ready(file: *file) void = {
 	assert(file.op & op::WRITE_MASK == op::WRITEV);
 	let req = file_get_request(&file.writeq): *ioreq;
 

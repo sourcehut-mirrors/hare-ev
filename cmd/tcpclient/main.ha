@@ -61,11 +61,10 @@ fn connected(
 	ev::setuser(sock, state);
 	state.sock = sock;
 
-	ev::readable(&state.readable, &stdin_readable);
-
 	state.read = ev::ioreq_init(state.sock, state);
 	state.write = ev::ioreq_init(state.sock, state);
 	ev::read(&state.read, state.netbuf, &sock_read);
+	ev::readable(&state.readable, &stdin_readable);
 };
 
 fn stdin_readable(req: *ev::pollreq, user: nullable *opaque) void = {

@@ -44,6 +44,7 @@ export type file = struct {
 	op: op,
 	flags: fflags,
 	user: nullable *opaque,
+	link: file_list,
 
 	// Request queues
 	readq: req_list,
@@ -57,9 +58,6 @@ export type file = struct {
 		wait: nullable *child,
 		signal: nullable *signal,
 	},
-
-	// Linked list of files to be closed, head is on [[loop]]
-	close_link: nullable *file,
 };
 
 // Enables the desired operation on a file and links the given request into the
@@ -78,7 +76,12 @@ fn file_begin(file: *file, req: *req, kind: op) void = {
 		"e.g. read and recv");
 
 	file.op |= kind;
-	file_epoll_ctl(file);
+
+	if (file.flags & fflags::BLOCKING == 0) {
+		file_epoll_ctl(file);
+	} else if (file_list_empty(&file.link)) {
+		file_link(&file.ev.blockq, &file.link);
+	};
 
 	if (read) {
 		req_link(&file.readq, &req.link);
@@ -98,12 +101,19 @@ fn file_end(file: *file, kind: op) void = {
 	const prev = file.op & mask;
 	assert(prev == kind || prev == op::NONE); // Invariant
 
+	let reconfigure = false;
 	if (read && req_list_empty(&file.readq)) {
+		reconfigure = true;
 		file.op &= ~op::READ_MASK;
-		file_epoll_ctl(file);
 	} else if (write && req_list_empty(&file.writeq)) {
+		reconfigure = true;
 		file.op &= ~op::WRITE_MASK;
+	};
+
+	if (reconfigure && file.flags & fflags::BLOCKING == 0) {
 		file_epoll_ctl(file);
+	} else if (reconfigure && file.op == 0) {
+		file_unlink(&file.ev.blockq, &file.link);
 	};
 };
 
@@ -232,8 +242,7 @@ export fn unregister(file: *file) void = {
 export fn close(file: *file) void = {
 	const loop = file.ev;
 	if (loop.flags & loop_flag::DISPATCH != 0) {
-		file.close_link = loop.closeq;
-		loop.closeq = file;
+		file_link(&loop.closeq, &file.link);
 		return;
 	};
 

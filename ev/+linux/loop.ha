@@ -21,7 +21,8 @@ export type loop = struct {
 	dispatch: []*ondispatch,
 	nrequest: uint,
 	flags: loop_flag,
-	closeq: nullable *file,
+	blockq: file_list,
+	closeq: file_list,
 };
 
 export type loop_flag = enum uint {
@@ -64,7 +65,8 @@ export fn newloop(events: size = 256) (loop | nomem | errors::error) = {
 		dispatch = [],
 		nrequest = 0,
 		flags = loop_flag::NONE,
-		closeq = null,
+		blockq = file_list { ... },
+		closeq = file_list { ... },
 	};
 };
 
@@ -103,14 +105,42 @@ export fn do(
 	append(loop.dispatch, dispatch)?;
 };
 
-fn close_files(loop: *loop) void = {
-	for (let cur = loop.closeq; cur != null) {
-		const file = cur: *file;
-		let next = file.close_link;
+fn proc_closeq(loop: *loop) void = {
+	for (loop.closeq.tail != null) {
+		const link = loop.closeq.tail: *file_list;
+		const file = file_list_get_file(link);
+		file_unlink(&loop.closeq, &file.link);
 		close(file);
-		cur = next;
 	};
-	loop.closeq = null;
+};
+
+fn proc_blockq(loop: *loop) size = {
+	let nevent = 0z;
+	for (loop.blockq.tail != null) {
+		const link = loop.blockq.tail: *file_list;
+		const file = file_list_get_file(link);
+		assert(file.flags & fflags::BLOCKING != 0);
+
+		const pending = file.op;
+		if (pending & op::READ_MASK == op::READV) {
+			readv_ready(file);
+			nevent += 1;
+		};
+
+		if (pending & op::WRITE_MASK == op::WRITEV) {
+			writev_ready(file);
+			nevent += 1;
+		};
+
+		switch (pending) {
+		case op::READABLE =>
+			readable_ready(file);
+		case op::WRITABLE =>
+			writable_ready(file);
+		case => void;
+		};
+	};
+	return nevent;
 };
 
 // Dispatches the event loop, waiting for new events and calling their callbacks
@@ -141,7 +171,7 @@ export fn dispatch(
 	loop.flags |= loop_flag::DISPATCH;
 	defer {
 		loop.flags &= ~loop_flag::DISPATCH;
-		close_files(loop);
+		proc_closeq(loop);
 	};
 
 	let todo = loop.dispatch;
@@ -154,6 +184,10 @@ export fn dispatch(
 
 	if (len(loop.events) == 0 || loop.flags & loop_flag::STOP != 0) {
 		return true;
+	};
+
+	if (proc_blockq(loop) != 0) {
+		return loop.flags & loop_flag::STOP == 0;
 	};
 
 	// TODO: Deal with signals
@@ -185,14 +219,15 @@ export fn dispatch(
 		if (ev.events == 0) {
 			continue;
 		};
+
 		const pending = file.op;
 		if (ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0
 				&& file.op & op::READV != 0) {
-			readv_ready(file, ev);
+			readv_ready(file);
 		};
 		if (ev.events & (rt::EPOLLOUT | rt::EPOLLHUP) != 0
 				&& file.op & op::WRITEV != 0) {
-			writev_ready(file, ev);
+			writev_ready(file);
 		};
 
 		if (ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0
@@ -216,9 +251,9 @@ export fn dispatch(
 		case op::NONE =>
 			abort("No operation pending for ready object");
 		case op::READABLE =>
-			readable_ready(file, ev);
+			readable_ready(file);
 		case op::WRITABLE =>
-			writable_ready(file, ev);
+			writable_ready(file);
 		case op::ACCEPT =>
 			accept_ready(file, ev);
 		case op::CONNECT_TCP =>

@@ -40,17 +40,10 @@ export fn readable(
 ) void = {
 	const file = file_req_init(req, &readable_cancel);
 	req.cb = cb;
-
-	if (file.flags & fflags::BLOCKING != 0) {
-		file_req_finish(req, &file.readq);
-		cb(req, req.user);
-		return;
-	};
-
 	file_begin(file, req, op::READABLE);
 };
 
-fn readable_ready(file: *file, ev: *rt::epoll_event) void = {
+fn readable_ready(file: *file) void = {
 	assert(file.op & op::READABLE != 0);
 	let req = file_get_request(&file.readq): *pollreq;
 	file_req_finish(req, &file.readq);
@@ -76,17 +69,10 @@ export fn writable(
 ) void = {
 	const file = file_req_init(req, &writable_cancel);
 	req.cb = cb;
-
-	if (file.flags & fflags::BLOCKING != 0) {
-		file_req_finish(req, &file.writeq);
-		cb(req, req.user);
-		return;
-	};
-
 	file_begin(file, req, op::WRITABLE);
 };
 
-fn writable_ready(file: *file, ev: *rt::epoll_event) void = {
+fn writable_ready(file: *file) void = {
 	assert(file.op & op::WRITABLE != 0);
 	let req = file_get_request(&file.writeq): *pollreq;
 	file_req_finish(req, &file.writeq);
