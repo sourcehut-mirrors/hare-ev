@@ -239,7 +239,12 @@ export fn unregister(file: *file) void = {
 //
 // File closures requested during event callbacks are deferred until the end of
 // the current [[dispatch]] call.
+//
+// Calling close while there are pending I/O requests on a file is a programmer
+// error and will raise an assertion.
 export fn close(file: *file) void = {
+	assert(file.op == op::NONE, "Attempted to close file while in use");
+
 	const loop = file.ev;
 	if (loop.flags & loop_flag::DISPATCH != 0) {
 		file_link(&loop.closeq, &file.link);
