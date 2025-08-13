@@ -112,8 +112,6 @@ fn file_end(file: *file, kind: op) void = {
 
 	if (reconfigure && file.flags & fflags::BLOCKING == 0) {
 		file_epoll_ctl(file);
-	} else if (reconfigure && file.op == 0) {
-		file_unlink(&file.ev.blockq, &file.link);
 	};
 };
 
@@ -137,6 +135,10 @@ fn file_req_finish(req: *req, list: *req_list) void = {
 	file.ev.nrequest -= 1;
 	req.cancel = null;
 	req_unlink(list, &req.link);
+
+	if (file.flags & fflags::BLOCKING != 0) {
+		file_unlink(&file.ev.blockq, &file.link);
+	};
 };
 
 fn file_get_request(head: *req_list) *req = {
