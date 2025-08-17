@@ -99,7 +99,8 @@ fn file_end(file: *file, kind: op) void = {
 		else ~op::RW_MASK;
 
 	const prev = file.op & mask;
-	assert(prev == kind || prev == op::NONE); // Invariant
+	const paused = file.flags & fflags::PAUSED != 0;
+	assert(prev == kind || prev == op::NONE || paused); // Invariant
 
 	let reconfigure = false;
 	if (read && req_list_empty(&file.readq)) {
@@ -110,7 +111,7 @@ fn file_end(file: *file, kind: op) void = {
 		file.op &= ~op::WRITE_MASK;
 	};
 
-	if (reconfigure && file.flags & fflags::BLOCKING == 0) {
+	if (!paused && reconfigure && file.flags & fflags::BLOCKING == 0) {
 		file_epoll_ctl(file);
 	};
 };
