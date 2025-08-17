@@ -32,6 +32,7 @@ export type op = enum u32 {
 
 export type fflags = enum u32 {
 	NONE = 0,
+	CLOSE = 1 << 29,
 	PAUSED = 1 << 30,
 	BLOCKING = 1 << 31,
 };
@@ -232,17 +233,12 @@ export fn register(
 
 // Unregisters a file object with an event loop and frees resources associated
 // with it. Does not close the underlying file descriptor.
-export fn unregister(file: *file) void = {
-	pause(file);
-	free(file);
-};
-
-// Unregisters a file object with an event loop, frees resources associated with
-// it, and closes the underlying file descriptor.
 //
 // File closures requested during event callbacks are deferred until the end of
 // the current [[dispatch]] call.
-export fn close(file: *file) void = {
+export fn unregister(file: *file) void = _unregister(file);
+
+fn _unregister(file: *file) void = {
 	const loop = file.ev;
 	if (loop.flags & loop_flag::DISPATCH != 0) {
 		file_link(&loop.closeq, &file.link);
@@ -254,7 +250,20 @@ export fn close(file: *file) void = {
 		pause(file);
 	};
 	free(file);
-	io::close(fd)!;
+
+	if (file.flags & fflags::CLOSE != 0) {
+		io::close(fd)!;
+	};
+};
+
+// Unregisters a file object with an event loop, frees resources associated with
+// it, and closes the underlying file descriptor.
+//
+// File closures requested during event callbacks are deferred until the end of
+// the current [[dispatch]] call.
+export fn close(file: *file) void = {
+	file.flags |= fflags::CLOSE;
+	_unregister(file);
 };
 
 // Sets the user data field on this file object to the provided object.

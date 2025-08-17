@@ -114,7 +114,7 @@ fn proc_closeq(loop: *loop) void = {
 		const link = loop.closeq.tail: *file_list;
 		const file = file_list_get_file(link);
 		file_unlink(&loop.closeq, &file.link);
-		close(file);
+		_unregister(file);
 	};
 };
 
