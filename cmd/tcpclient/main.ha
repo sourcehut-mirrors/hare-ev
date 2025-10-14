@@ -23,7 +23,7 @@ export fn main() void = {
 
 	let state = state {
 		loop = &loop,
-		sock = null: *ev::file, // populated by [[connected]]
+		sock = @undefined, // populated by [[connected]]
 		read = ev::IOREQ_INIT,
 		write = ev::IOREQ_INIT,
 		readable = ev::POLLREQ_INIT,
