@@ -249,11 +249,10 @@ fn _unregister(file: *file) void = {
 	if (file.flags & fflags::PAUSED == 0) {
 		pause(file);
 	};
-	free(file);
-
 	if (file.flags & fflags::CLOSE != 0) {
 		io::close(fd)!;
 	};
+	free(file);
 };
 
 // Unregisters a file object with an event loop, frees resources associated with
