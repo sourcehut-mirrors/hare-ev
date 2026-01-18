@@ -32,6 +32,7 @@ export type op = enum u32 {
 
 export type fflags = enum u32 {
 	NONE = 0,
+	CLOSING = 1 << 28,
 	CLOSE = 1 << 29,
 	PAUSED = 1 << 30,
 	BLOCKING = 1 << 31,
@@ -241,6 +242,7 @@ export fn unregister(file: *file) void = _unregister(file);
 fn _unregister(file: *file) void = {
 	const loop = file.ev;
 	if (loop.flags & loop_flag::DISPATCH != 0) {
+		file.flags |= fflags::CLOSING;
 		file_link(&loop.closeq, &file.link);
 		return;
 	};

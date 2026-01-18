@@ -260,7 +260,9 @@ export fn dispatch(
 
 		switch (pending) {
 		case op::NONE =>
-			abort("No operation pending for ready object");
+			if (file.flags & fflags::CLOSING == 0) {
+				abort("No operation pending for ready object");
+			};
 		case op::READABLE =>
 			readable_ready(file);
 		case op::WRITABLE =>
