@@ -33,8 +33,8 @@ fn dial_tcp(
 	let ok = false;
 	let dialer = alloc(tcp_dialer {
 		req = req,
-		resolve = RESOLVER_INIT,
-		connect = ev::SOCKREQ_INIT,
+		resolve = @undefined,
+		connect = @undefined,
 		...
 	})?;
 	defer if (!ok) free(dialer);
@@ -152,7 +152,7 @@ fn dial_udp(
 	let ok = false;
 	let dialer = alloc(udp_dialer {
 		req = req,
-		resolve = RESOLVER_INIT,
+		resolve = @undefined,
 		...
 	})?;
 	defer if (!ok) free(dialer);

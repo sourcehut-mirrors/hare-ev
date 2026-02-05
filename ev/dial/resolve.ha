@@ -31,15 +31,6 @@ export type resolver = struct {
 	port: u16,
 };
 
-// An uninitialized [[resolver]] value. This can be used to statically
-// initialize [[resolver]] objects when [[resolver_init]] is not applicable,
-// for instance when storing an [[resolver]] in a global.
-export def RESOLVER_INIT = resolver {
-	qa = edns::REQ_INIT,
-	qaaaa = edns::REQ_INIT,
-	...
-};
-
 // Initializes a [[resolver]] for use with the given event loop, with an
 // optional user data pointer.
 //
@@ -52,8 +43,8 @@ export fn resolver_init(
 	return resolver {
 		loop = loop,
 		user = user,
-		qa = edns::REQ_INIT,
-		qaaaa = edns::REQ_INIT,
+		qa = @undefined,
+		qaaaa = @undefined,
 		...
 	};
 };

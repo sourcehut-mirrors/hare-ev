@@ -39,14 +39,6 @@ export type dgramreq = struct {
 	},
 };
 
-// An uninitialized [[dgramreq]] value. This can be used to statically
-// initialize [[dgramreq]] objects when [[dgramreq_init]] is not applicable, for
-// instance when storing an [[dgramreq]] in a global.
-export def DGRAMREQ_INIT = dgramreq {
-	dest = [0, 0, 0, 0]: ip::addr4: ip::addr,
-	...
-};
-
 // Initializes a [[dgramreq]] with a specified file and optional user data
 // pointer. A single request object may be re-used after it is completed or
 // [[cancel]]led, with the same file and user data, or it can be reinitialized

@@ -26,11 +26,6 @@ export type ioreq = struct {
 	},
 };
 
-// An uninitialized [[ioreq]] value. This can be used to statically initialize
-// [[ioreq]] objects when [[ioreq_init]] is not applicable, for instance when
-// storing an [[ioreq]] in a global.
-export def IOREQ_INIT = ioreq { ... };
-
 // Initializes an [[ioreq]] with a specified file and optional user data
 // pointer. A single I/O request object may be re-used after it is completed or
 // [[cancel]]led, with the same file and user data, or it can be reinitialized

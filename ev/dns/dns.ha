@@ -59,15 +59,6 @@ export type req = struct {
 	cb: nullable *querycb,
 };
 
-export def REQ_INIT = req {
-	r4 = ev::DGRAMREQ_INIT,
-	r6 = ev::DGRAMREQ_INIT,
-	timer = ev::TIMER_INIT,
-	connect = ev::SOCKREQ_INIT,
-	read = ev::IOREQ_INIT,
-	...
-};
-
 // Initializes a new [[req]] for use with [[query]]. This function allocates
 // memory and binds a UDP socket for the lifetime of the [[req]] object,
 // which must be disposed of with [[req_finish]].
@@ -81,7 +72,7 @@ export fn req_init(
 	user: nullable *opaque = null,
 	timeout: time::duration = 3 * time::SECOND,
 ) (req | net::error | errors::error | nomem) = {
-	let req = REQ_INIT;
+	let req = req { @undefined... };
 	let ok = false;
 	defer if (!ok) req_finish(&req);
 	req.loop = loop;

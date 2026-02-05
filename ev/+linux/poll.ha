@@ -9,11 +9,6 @@ export type pollreq = struct {
 	cb: nullable *pollcb,
 };
 
-// An uninitialized [[pollreq]] value. This can be used to statically
-// initialize [[pollreq]] objects when [[pollreq_init]] is not applicable, for
-// instance when storing an [[pollreq]] in a global.
-export def POLLREQ_INIT = pollreq { ... };
-
 // Initializes a [[pollreq]] with a specified file and optional user data
 // pointer. A single request object may be re-used after it is completed or
 // [[cancel]]led, with the same file and user data, or it can be reinitialized

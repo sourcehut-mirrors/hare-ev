@@ -24,9 +24,9 @@ export fn main() void = {
 	let state = state {
 		loop = &loop,
 		sock = @undefined, // populated by [[connected]]
-		read = ev::IOREQ_INIT,
-		write = ev::IOREQ_INIT,
-		readable = ev::POLLREQ_INIT,
+		read = @undefined,
+		write = @undefined,
+		readable = @undefined,
 		...
 	};
 	const stdin = ev::register(&loop, os::stdin_file)!;

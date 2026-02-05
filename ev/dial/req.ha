@@ -15,13 +15,6 @@ export type dialreq = struct {
 	dialer: nullable *opaque,
 };
 
-// An uninitialized [[dialreq]] value. This can be used to statically initialize
-// [[dialreq]] objects when [[dialreq_init]] is not applicable, for instance
-// when storing an [[dialreq]] in a global.
-export def DIALREQ_INIT = dialreq {
-	...
-};
-
 // Initializes a [[dialreq]] for use with the given event loop, with an optional
 // user data pointer.
 //

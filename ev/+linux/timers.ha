@@ -13,11 +13,6 @@ export type timer = struct {
 	repeat: time::duration,
 };
 
-// An uninitialized [[timer]] value. This can be used to statically
-// initialize [[timer]] objects when [[timer_init]] is not applicable, for
-// instance when storing a [[timer]] in a global.
-export def TIMER_INIT = timer { ... };
-
 // Initializes a [[timer]] to run on the specified event [[loop]]. The timer is
 // initially unconfigured and will not fire any callbacks; see
 // [[timer_configure]] to configure it.

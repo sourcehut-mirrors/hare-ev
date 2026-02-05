@@ -17,11 +17,6 @@ export type child = struct {
 	cb: nullable *waitcb,
 };
 
-// An uninitialized [[child]] value. This can be used to statically initialize
-// [[child]] objects when [[exec]] is not applicable, for instance when storing
-// a [[child]] in a global.
-export def CHILD_INIT = child { ... };
-
 // Starts a child process prepared with [[exec::cmd]] and returns a [[child]]
 // that can be used to [[wait]] for it to exit.
 //

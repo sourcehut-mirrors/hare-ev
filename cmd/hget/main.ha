@@ -27,7 +27,7 @@ export fn main() void = {
 		exit = os::status::SUCCESS,
 		uri = &uri,
 		buf = [0...],
-		ioreq = ev::IOREQ_INIT,
+		ioreq = @undefined,
 	};
 
 	let req = dial::dialreq_init(&loop, &state);

@@ -29,14 +29,6 @@ export type sockreq = struct {
 	},
 };
 
-// An uninitialized [[sockreq]] value. This can be used to statically initialize
-// [[sockreq]] objects when [[connect_init]] or [[accept_init]] is not
-// applicable, for instance when storing a [[sockreq]] in a global.
-export def SOCKREQ_INIT = sockreq {
-	flags = 0,
-	...
-};
-
 // Initializes a [[sockreq]] for use with [[connect_tcp]] et al.
 //
 // A single I/O request object may be re-used after it is completed or

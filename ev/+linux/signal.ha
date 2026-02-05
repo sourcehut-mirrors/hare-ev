@@ -15,11 +15,6 @@ export type signal = struct {
 	mask: signal::sigset,
 };
 
-// An uninitialized [[handler]] value. This can be used to statically initialize
-// [[sigreq]] objects when [[signal_init]] is not applicable, for instance when
-// storing a [[sigreq]] in a global.
-export def SIGNAL_INIT = signal { ... };
-
 // Creates a [[signal]] handler with a set of signals. Pass the signal handler
 // to [[handle]] to await signal delivery.
 //
