@@ -185,13 +185,27 @@ export fn dispatch(
 		proc_closeq(loop);
 	};
 
+	let dispatched = false;
 	let todo = loop.dispatch;
 	loop.dispatch = [];
 	for (let dispatch .. todo) {
 		dispatch.cb(loop, dispatch.user);
 		free(dispatch);
+		dispatched = true;
 	};
 	free(todo);
+
+	if (loop.nrequest == 0) {
+		if (loop.flags & loop_flag::STOP != 0) {
+			return false;
+		};
+
+		if (dispatched || len(loop.dispatch) > 0) {
+			return true;
+		};
+
+		abort("No action pending");
+	};
 
 	if (len(loop.events) == 0 || loop.flags & loop_flag::STOP != 0) {
 		return true;
