@@ -10,3 +10,13 @@ handler (e.g. [[readv]]). The user is responsible for allocating request objects
 of the I/O operation.
 
 Use [[ev::run]] or [[ev::dispatch]] to process I/O events.
+
+Note that many programs (e.g. daemons) which use event-driven I/O would be wise
+to consider masking SIGPIPE, to avoid being killed when writing to a closed pipe
+or socket.
+
+	use unix::signal;
+
+	// ...
+
+	signal::ignore(signal::sig::PIPE);
