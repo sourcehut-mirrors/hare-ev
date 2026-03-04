@@ -4,7 +4,7 @@ use net::ip;
 use net::tcp;
 use net::udp;
 use net::unix;
-use rt;
+use sys;
 
 // Callback for a connect operation, e.g. [[connect_tcp]].
 export type connectcb = fn(
@@ -135,10 +135,10 @@ export fn connect_tcp(
 
 fn connect_tcp_ready(
 	sock: *file,
-	ev: *rt::epoll_event,
+	ev: *sys::epoll_event,
 ) void = {
 	assert(sock.op == op::CONNECT_TCP);
-	assert(ev.events & rt::EPOLLOUT != 0);
+	assert(ev.events & sys::EPOLLOUT != 0);
 	let req = sock.connect as *sockreq;
 	loop_req_finish(req);
 
@@ -147,13 +147,13 @@ fn connect_tcp_ready(
 	file_epoll_ctl(sock);
 
 	let errno = 0i, optsz = size(int): u32;
-	rt::getsockopt(sock.fd, rt::SOL_SOCKET, rt::SO_ERROR, &errno, &optsz)!;
+	sys::getsockopt(sock.fd, sys::SOL_SOCKET, sys::SO_ERROR, &errno, &optsz)!;
 	if (errno != 0) {
 		cb(req, errors::errno(errno), req.user);
 		close(sock);
 	} else {
-		const fl = rt::fcntl(sock.fd, rt::F_GETFL, void)!;
-		rt::fcntl(sock.fd, rt::F_SETFL, fl & ~rt::O_NONBLOCK)!;
+		const fl = sys::fcntl(sock.fd, sys::F_GETFL, void)!;
+		sys::fcntl(sock.fd, sys::F_SETFL, fl & ~sys::O_NONBLOCK)!;
 		cb(req, sock, req.user);
 	};
 };
@@ -180,10 +180,10 @@ export fn connect_unix(
 
 fn connect_unix_ready(
 	sock: *file,
-	ev: *rt::epoll_event,
+	ev: *sys::epoll_event,
 ) void = {
 	assert(sock.op == op::CONNECT_UNIX);
-	assert(ev.events & rt::EPOLLOUT != 0);
+	assert(ev.events & sys::EPOLLOUT != 0);
 	let req = sock.connect as *sockreq;
 	loop_req_finish(req);
 
@@ -192,13 +192,13 @@ fn connect_unix_ready(
 	file_epoll_ctl(sock);
 
 	let errno = 0i, optsz = size(int): u32;
-	rt::getsockopt(sock.fd, rt::SOL_SOCKET, rt::SO_ERROR, &errno, &optsz)!;
+	sys::getsockopt(sock.fd, sys::SOL_SOCKET, sys::SO_ERROR, &errno, &optsz)!;
 	if (errno != 0) {
 		cb(req, errors::errno(errno), req.user);
 		close(sock);
 	} else {
-		const fl = rt::fcntl(sock.fd, rt::F_GETFL, void)!;
-		rt::fcntl(sock.fd, rt::F_SETFL, fl & ~rt::O_NONBLOCK)!;
+		const fl = sys::fcntl(sock.fd, sys::F_GETFL, void)!;
+		sys::fcntl(sock.fd, sys::F_SETFL, fl & ~sys::O_NONBLOCK)!;
 		cb(req, sock, req.user);
 	};
 };
@@ -228,7 +228,7 @@ export fn accept(
 
 fn accept_ready(
 	sock: *file,
-	ev: *rt::epoll_event,
+	ev: *sys::epoll_event,
 ) void = {
 	assert(sock.op & ~op::RW_MASK == op::ACCEPT);
 	let req = file_get_request(&sock.acceptq): *sockreq;

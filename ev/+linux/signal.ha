@@ -1,5 +1,5 @@
 use errors;
-use rt;
+use sys;
 use unix::signal;
 
 // Callback function for [[signal]] operations.
@@ -27,10 +27,10 @@ export fn signal_init(
 ) (signal | errors::error | nomem) = {
 	const empty = signal::newsigset();
 
-	const fd = match (rt::signalfd(-1, &empty, rt::SFD_CLOEXEC)) {
+	const fd = match (sys::signalfd(-1, &empty, sys::SFD_CLOEXEC)) {
 	case let fd: int =>
 		yield fd;
-	case let err: rt::errno =>
+	case let err: sys::errno =>
 		return errors::errno(err);
 	};
 
@@ -98,7 +98,7 @@ fn signal_arm(req: *signal) void = {
 	const file = req.file as *file;
 
 	signal::setprocmask(signal::how::BLOCK, &req.mask);
-	rt::signalfd(file.fd, &req.mask, rt::SFD_CLOEXEC)!;
+	sys::signalfd(file.fd, &req.mask, sys::SFD_CLOEXEC)!;
 
 	file.op = op::SIGNAL;
 	file_epoll_ctl(file);
@@ -109,13 +109,13 @@ fn signal_disarm(req: *signal) void = {
 
 	const empty = signal::newsigset();
 	signal::setprocmask(signal::how::UNBLOCK, &req.mask);
-	rt::signalfd(file.fd, &empty, rt::SFD_CLOEXEC)!;
+	sys::signalfd(file.fd, &empty, sys::SFD_CLOEXEC)!;
 
 	file.op = op::NONE;
 	file_epoll_ctl(file);
 };
 
-fn signal_ready(file: *file, ev: *rt::epoll_event) void = {
+fn signal_ready(file: *file, ev: *sys::epoll_event) void = {
 	assert(file.op == op::SIGNAL);
 	let req = match (file.signal) {
 	case let sig: *signal =>

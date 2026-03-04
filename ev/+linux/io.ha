@@ -1,5 +1,5 @@
 use io;
-use rt;
+use sys;
 
 // A callback for a [[read]] or [[readv]] operation.
 export type readcb = fn(

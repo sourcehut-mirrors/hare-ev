@@ -2,7 +2,7 @@ use errors;
 use io;
 use net;
 use net::ip;
-use rt;
+use sys;
 use unix::signal;
 
 export type op = enum u32 {
@@ -166,7 +166,7 @@ export fn pause(file: *file) void = {
 		// use-after-free or if the user fucks around and constructs a
 		// custom [[file]] which was never registered, so assert on
 		// error.
-		rt::epoll_ctl(loop.fd, rt::EPOLL_CTL_DEL, file.fd, null)!;
+		sys::epoll_ctl(loop.fd, sys::EPOLL_CTL_DEL, file.fd, null)!;
 	};
 
 	for (let ev &.. loop.events) {
@@ -192,18 +192,18 @@ export fn resume(file: *file) (void | errors::error) = {
 	};
 
 	let fd = file.fd;
-	let ev = rt::epoll_event {
+	let ev = sys::epoll_event {
 		events = 0,
-		data = rt::epoll_data {
+		data = sys::epoll_data {
 			fd = 0,
 			ptr = file,
 		}
 	};
-	match (rt::epoll_ctl(file.ev.fd, rt::EPOLL_CTL_ADD, fd, &ev)) {
+	match (sys::epoll_ctl(file.ev.fd, sys::EPOLL_CTL_ADD, fd, &ev)) {
 	case void =>
 		yield;
-	case let err: rt::errno =>
-		if (err != rt::EPERM) {
+	case let err: sys::errno =>
+		if (err != sys::EPERM) {
 			return errors::errno(err);
 		};
 		// epoll(2) does not support regular files, use blocking
@@ -297,8 +297,8 @@ export fn setprio(file: *file, prio: int) void = {
 };
 
 fn sort_events(a: const *opaque, b: const *opaque) int = {
-	const a = a: *rt::epoll_event;
-	const b = b: *rt::epoll_event;
+	const a = a: *sys::epoll_event;
+	const b = b: *sys::epoll_event;
 
 	if (a.data.fd == 0 || b.data.fd == 0) {
 		return 0;
@@ -312,47 +312,47 @@ fn sort_events(a: const *opaque, b: const *opaque) int = {
 
 // Updates epoll events for a given file. For internal use.
 fn file_epoll_ctl(file: *file) void = {
-	let events = rt::EPOLLONESHOT;
+	let events = sys::EPOLLONESHOT;
 
 	switch (file.op & op::READ_MASK) {
 	case op::READV, op::READABLE =>
-		events |= rt::EPOLLIN | rt::EPOLLHUP;
+		events |= sys::EPOLLIN | sys::EPOLLHUP;
 	case op::RECV, op::RECVFROM =>
-		events |= rt::EPOLLIN;
+		events |= sys::EPOLLIN;
 	case => void;
 	};
 
 	switch (file.op & op::WRITE_MASK) {
 	case op::WRITEV, op::WRITABLE =>
-		events |= rt::EPOLLOUT | rt::EPOLLHUP;
+		events |= sys::EPOLLOUT | sys::EPOLLHUP;
 	case op::SEND, op::SENDTO =>
-		events |= rt::EPOLLOUT;
+		events |= sys::EPOLLOUT;
 	case => void;
 	};
 
 	switch (file.op & ~op::RW_MASK) {
 	case op::ACCEPT =>
-		events |= rt::EPOLLIN;
+		events |= sys::EPOLLIN;
 	case op::CONNECT_TCP, op::CONNECT_UNIX =>
-		events |= rt::EPOLLOUT;
+		events |= sys::EPOLLOUT;
 	case op::SIGNAL =>
-		events |= rt::EPOLLIN;
+		events |= sys::EPOLLIN;
 	case op::TIMER =>
-		events &= ~rt::EPOLLONESHOT;
-		events |= rt::EPOLLIN;
+		events &= ~sys::EPOLLONESHOT;
+		events |= sys::EPOLLIN;
 	case op::WAIT =>
-		events |= rt::EPOLLIN;
+		events |= sys::EPOLLIN;
 	case => void;
 	};
 
-	let ev = rt::epoll_event {
+	let ev = sys::epoll_event {
 		events = events,
-		data = rt::epoll_data {
+		data = sys::epoll_data {
 			fd = 0,
 		},
 	};
 	ev.data.ptr = file;
 	// This can only fail under conditions associated with EPOLLEXCLUSIVE,
 	// which we do not support.
-	rt::epoll_ctl(file.ev.fd, rt::EPOLL_CTL_MOD, file.fd, &ev)!;
+	sys::epoll_ctl(file.ev.fd, sys::EPOLL_CTL_MOD, file.fd, &ev)!;
 };

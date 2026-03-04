@@ -1,6 +1,6 @@
 use errors;
 use io;
-use rt;
+use sys;
 use time;
 
 // A callback which executes when a timer expires.
@@ -25,11 +25,11 @@ export fn timer_init(
 	cb: *timercb,
 	user: nullable *opaque = null,
 ) (timer | errors::error | nomem) = {
-	def FLAGS = rt::TFD_NONBLOCK | rt::TFD_CLOEXEC;
-	const fd = match (rt::timerfd_create(clock, FLAGS)) {
+	def FLAGS = sys::TFD_NONBLOCK | sys::TFD_CLOEXEC;
+	const fd = match (sys::timerfd_create(clock, FLAGS)) {
 	case let fd: int =>
 		yield fd: io::file;
-	case let errno: rt::errno =>
+	case let errno: sys::errno =>
 		return errors::errno(errno);
 	};
 
@@ -70,12 +70,12 @@ export fn timer_configure(
 		abort("timer_configure called with uninitialized timer object");
 	};
 
-	const spec = rt::itimerspec {
+	const spec = sys::itimerspec {
 		it_value = time::duration_to_timespec(delay),
 		it_interval = time::duration_to_timespec(repeat),
 		...
 	};
-	rt::timerfd_settime(file.fd, 0, &spec, null)!;
+	sys::timerfd_settime(file.fd, 0, &spec, null)!;
 
 	const was_armed = timer.delay != 0 || timer.repeat != 0;
 	const is_armed = delay != 0 || repeat != 0;
@@ -107,8 +107,8 @@ export fn timer_gettime(timer: *timer) (time::duration, time::duration) = {
 		abort("timer_gettime called with uninitialized timer object");
 	};
 
-	let spec = rt::itimerspec { ... };
-	rt::timerfd_gettime(file.fd, &spec)!;
+	let spec = sys::itimerspec { ... };
+	sys::timerfd_gettime(file.fd, &spec)!;
 	timer.delay = time::timespec_to_duration(spec.it_value);
 	timer.repeat = time::timespec_to_duration(spec.it_interval);
 	return (timer.delay, timer.repeat);
@@ -134,7 +134,7 @@ fn timer_disarm(timer: *timer) void = {
 	file_epoll_ctl(file);
 };
 
-fn timer_ready(file: *file, ev: *rt::epoll_event) void = {
+fn timer_ready(file: *file, ev: *sys::epoll_event) void = {
 	assert(file.op == op::TIMER);
 	let timer = match (file.timer) {
 	case let t: *timer =>

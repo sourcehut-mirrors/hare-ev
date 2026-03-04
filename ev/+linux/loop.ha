@@ -1,6 +1,6 @@
 use errors;
 use io;
-use rt;
+use sys;
 use sort;
 use time;
 use types;
@@ -17,7 +17,7 @@ export type ondispatch = struct {
 
 export type loop = struct {
 	fd: io::file,
-	events: []rt::epoll_event,
+	events: []sys::epoll_event,
 	dispatch: []*ondispatch,
 	nrequest: uint,
 	flags: loop_flag,
@@ -47,18 +47,18 @@ fn loop_req_finish(req: *req) void = {
 // The optional "events" parameter controls how many events may be pending at
 // once. Most applications should not need to configure this parameter.
 export fn newloop(events: size = 256) (loop | nomem | errors::error) = {
-	const fd = match (rt::epoll_create1(rt::EPOLL_CLOEXEC)) {
+	const fd = match (sys::epoll_create1(sys::EPOLL_CLOEXEC)) {
 	case let fd: int =>
 		yield fd: io::file;
-	case let err: rt::errno =>
+	case let err: sys::errno =>
 		return errors::errno(err);
 	};
 
 	return loop {
 		fd = fd,
-		events = alloc([rt::epoll_event {
+		events = alloc([sys::epoll_event {
 			events = 0,
-			data = rt::epoll_data {
+			data = sys::epoll_data {
 				fd = 0,
 			}
 		}...], events)?,
@@ -218,14 +218,14 @@ export fn dispatch(
 	// TODO: Deal with signals
 	const maxev = len(loop.events);
 	assert(maxev <= types::INT_MAX: size, "ev::dispatch: too many events");
-	const nevent = match(rt::epoll_pwait(
+	const nevent = match(sys::epoll_pwait(
 		loop.fd, &loop.events[0],
 		maxev: int, millis, null)) {
 	case let nevent: int =>
 		yield nevent;
-	case let err: rt::errno =>
+	case let err: sys::errno =>
 		switch (err) {
-		case rt::EINTR =>
+		case sys::EINTR =>
 			// We shallow system suspension error code
 			return true;
 		case =>
@@ -237,7 +237,7 @@ export fn dispatch(
 		return true;
 	};
 
-	sort::sort(loop.events[..nevent], size(rt::epoll_event), &sort_events)!;
+	sort::sort(loop.events[..nevent], size(sys::epoll_event), &sort_events)!;
 
 	for (let ev &.. loop.events[..nevent]) {
 		const file = ev.data.ptr: *file;
@@ -246,28 +246,28 @@ export fn dispatch(
 		};
 
 		const pending = file.op;
-		if (ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0
+		if (ev.events & (sys::EPOLLIN | sys::EPOLLHUP) != 0
 				&& file.op & op::READV != 0) {
 			readv_ready(file);
 		};
-		if (ev.events & (rt::EPOLLOUT | rt::EPOLLHUP) != 0
+		if (ev.events & (sys::EPOLLOUT | sys::EPOLLHUP) != 0
 				&& file.op & op::WRITEV != 0) {
 			writev_ready(file);
 		};
 
-		if (ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0
+		if (ev.events & (sys::EPOLLIN | sys::EPOLLHUP) != 0
 				&& file.op & op::RECV != 0) {
 			recv_ready(file, ev);
 		};
-		if (ev.events & (rt::EPOLLIN | rt::EPOLLHUP) != 0
+		if (ev.events & (sys::EPOLLIN | sys::EPOLLHUP) != 0
 				&& file.op & op::RECVFROM != 0) {
 			recvfrom_ready(file, ev);
 		};
-		if (ev.events & (rt::EPOLLOUT | rt::EPOLLHUP) != 0
+		if (ev.events & (sys::EPOLLOUT | sys::EPOLLHUP) != 0
 				&& file.op & op::SEND != 0) {
 			send_ready(file, ev);
 		};
-		if (ev.events & (rt::EPOLLOUT | rt::EPOLLHUP) != 0
+		if (ev.events & (sys::EPOLLOUT | sys::EPOLLHUP) != 0
 				&& file.op & op::SENDTO != 0) {
 			sendto_ready(file, ev);
 		};

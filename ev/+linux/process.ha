@@ -1,7 +1,7 @@
 use errors;
 use fmt;
 use os::exec;
-use rt;
+use sys;
 use time;
 use unix::signal::{sig, code};
 
@@ -28,17 +28,17 @@ export fn exec(
 	user: nullable *opaque = null,
 ) (child | exec::error | nomem) = {
 	let pidfd: int = 0;
-	let args = rt::clone_args {
-		flags = rt::CLONE_PIDFD,
+	let args = sys::clone_args {
+		flags = sys::CLONE_PIDFD,
 		pidfd = &pidfd: uintptr: u64,
 		exit_signal = sig::CHLD: u64,
 		...
 	};
 
-	const pid = match (rt::clone3(&args)) {
-	case let pid: rt::pid_t =>
+	const pid = match (sys::clone3(&args)) {
+	case let pid: sys::pid_t =>
 		yield pid;
-	case let errno: rt::errno =>
+	case let errno: sys::errno =>
 		return errors::errno(errno);
 	};
 
@@ -71,9 +71,9 @@ export fn wait(req: *child, cb: *waitcb) void = {
 	req.cb = cb;
 
 	// Attempt to waitid now to hit error cases early
-	match (do_waitid(req, rt::WNOHANG)) {
-	case let err: rt::errno =>
-		assert(err == rt::EAGAIN,
+	match (do_waitid(req, sys::WNOHANG)) {
+	case let err: sys::errno =>
+		assert(err == sys::EAGAIN,
 			"ev::wait: unexpected error from waitid (not a pidfd?)");
 	case void =>
 		// Child has already exited. do_waitid ran the callback, so we
@@ -86,23 +86,23 @@ export fn wait(req: *child, cb: *waitcb) void = {
 	file_epoll_ctl(file);
 };
 
-// Calls [[rt::waitid]] with the given options. If successful, calls the
+// Calls [[sys::waitid]] with the given options. If successful, calls the
 // callback and cleans up the file (and returns void). If unsuccessful, returns
 // the error.
-fn do_waitid(req: *child, options: int = 0) (void | rt::errno) = {
-	def WAIT_OPTIONS = rt::WEXITED;
+fn do_waitid(req: *child, options: int = 0) (void | sys::errno) = {
+	def WAIT_OPTIONS = sys::WEXITED;
 
 	const proc = req.file as *file;
-	let si = rt::siginfo { ... };
-	let ru = rt::rusage { ... };
-	match (rt::waitid(rt::idtype::P_PIDFD, proc.fd: rt::id_t, &si,
+	let si = sys::siginfo { ... };
+	let ru = sys::rusage { ... };
+	match (sys::waitid(sys::idtype::P_PIDFD, proc.fd: sys::id_t, &si,
 		WAIT_OPTIONS | options, &ru)) {
 	case void =>
 		if (si.si_pid == 0) {
-			assert(options & rt::WNOHANG != 0);
-			return rt::EAGAIN;
+			assert(options & sys::WNOHANG != 0);
+			return sys::EAGAIN;
 		};
-	case let err: rt::errno =>
+	case let err: sys::errno =>
 		return err;
 	};
 
@@ -126,7 +126,7 @@ fn do_waitid(req: *child, options: int = 0) (void | rt::errno) = {
 	close(proc);
 };
 
-fn wait_ready(proc: *file, ev: *rt::epoll_event) void = {
+fn wait_ready(proc: *file, ev: *sys::epoll_event) void = {
 	assert(proc.op == op::WAIT);
 	const req = proc.wait as *child;
 
@@ -135,15 +135,15 @@ fn wait_ready(proc: *file, ev: *rt::epoll_event) void = {
 		match (do_waitid(req)) {
 		case void =>
 			break;
-		case let err: rt::errno =>
+		case let err: sys::errno =>
 			// Interrupted by signal handler, try again
-			assert(err == rt::EINTR);
+			assert(err == sys::EINTR);
 		};
 	};
 };
 
 // Copied from os::exec
-fn rusage(st: *exec::status, ru: *rt::rusage) void = {
+fn rusage(st: *exec::status, ru: *sys::rusage) void = {
 	st.rusage.utime = time::instant {
 		sec = ru.ru_utime.tv_sec,
 		nsec = ru.ru_utime.tv_usec * time::MICROSECOND: i64,
@@ -164,9 +164,9 @@ fn rusage(st: *exec::status, ru: *rt::rusage) void = {
 // Sends a signal to a process started with [[ev::exec]].
 export fn kill(req: *child, sig: sig = sig::TERM) (void | errors::error) = {
 	const file = req.file as *file;
-	match (rt::pidfd_send_signal(file.fd, sig, null, 0)) {
+	match (sys::pidfd_send_signal(file.fd, sig, null, 0)) {
 	case void => void;
-	case let err: rt::errno =>
+	case let err: sys::errno =>
 		return errors::errno(err);
 	};
 };

@@ -1,7 +1,7 @@
 use net;
 use net::ip;
 use net::udp;
-use rt;
+use sys;
 
 // Callback for a [[recvfrom]] operation. The second parameter is either an
 // error or a tuple of the number of bytes received and the IP address and port
@@ -80,7 +80,7 @@ export fn recvfrom(
 
 fn recvfrom_ready(
 	sock: *file,
-	ev: *rt::epoll_event,
+	ev: *sys::epoll_event,
 ) void = {
 	assert(sock.op & op::RECVFROM != 0);
 	let req = file_get_request(&sock.readq): *dgramreq;
@@ -119,7 +119,7 @@ export fn recv(
 
 fn recv_ready(
 	sock: *file,
-	ev: *rt::epoll_event,
+	ev: *sys::epoll_event,
 ) void = {
 	assert(sock.op & op::RECV != 0);
 	let req = file_get_request(&sock.readq): *dgramreq;
@@ -157,7 +157,7 @@ export fn send(
 
 fn send_ready(
 	sock: *file,
-	ev: *rt::epoll_event,
+	ev: *sys::epoll_event,
 ) void = {
 	assert(sock.op & op::SEND != 0);
 	let req = file_get_request(&sock.writeq): *dgramreq;
@@ -209,7 +209,7 @@ export fn sendto(
 
 fn sendto_ready(
 	sock: *file,
-	ev: *rt::epoll_event,
+	ev: *sys::epoll_event,
 ) void = {
 	assert(sock.op & op::SENDTO != 0);
 	let req = file_get_request(&sock.writeq): *dgramreq;
