@@ -20,7 +20,7 @@ export fn main() void = {
 
 	const timer = ev::timer_init(&loop,
 		time::clock::MONOTONIC, &expired, &child)!;
-	ev::timer_configure(&timer, 5 * time::SECOND, 0);
+	ev::timer_configure(&timer, 5 * time::SECOND, 0)!;
 	ev::req_setuser(&child, &timer);
 
 	ev::run(&loop)!;

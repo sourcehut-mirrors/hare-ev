@@ -62,7 +62,7 @@ export fn timer_configure(
 	timer: *timer,
 	delay: time::duration,
 	repeat: time::duration,
-) void = {
+) (void | errors::error) = {
 	const file = match (timer.file) {
 	case let f: *file =>
 		yield f;
@@ -78,11 +78,8 @@ export fn timer_configure(
 	match (sys::timerfd_settime(file.fd, 0, &spec, null)) {
 	case int => void;
 	case let errno: sys::errno =>
-		switch (errno) {
-		case sys::EINVAL =>
-			abort("Invalid timeout values");
-		case sys::ECANCELED => void; // discontinuous clock changes
-		case => abort(); // unreachable
+		if (errno != sys::ECANCELED) {
+			return errors::errno(errno);
 		};
 	};
 
@@ -175,5 +172,5 @@ fn timer_ready(file: *file, ev: *sys::epoll_event) void = {
 
 fn timer_cancel(req: *req) void = {
 	let timer = req: *timer;
-	timer_configure(timer, 0, 0);
+	timer_configure(timer, 0, 0)!;
 };

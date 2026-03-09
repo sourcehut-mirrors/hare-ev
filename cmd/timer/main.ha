@@ -7,7 +7,7 @@ export fn main() void = {
 	defer ev::finish(&loop);
 
 	const timer = ev::timer_init(&loop, time::clock::MONOTONIC, &expired)!;
-	ev::timer_configure(&timer, 1 * time::SECOND, 500 * time::MILLISECOND);
+	ev::timer_configure(&timer, 1 * time::SECOND, 500 * time::MILLISECOND)!;
 
 	for (ev::dispatch(&loop, -1)!) void;
 };

@@ -144,7 +144,7 @@ export fn query(
 	req.connect = ev::connect_init(req.loop as *ev::loop, req);
 
 	ev::req_setuser(&req.timer, req);
-	ev::timer_configure(&req.timer, req.timeout, 0);
+	ev::timer_configure(&req.timer, req.timeout, 0)!;
 
 	// Note: the initial set of requests is sent directly through net::udp
 	// as it is assumed they can fit into the kernel's internal send buffer
