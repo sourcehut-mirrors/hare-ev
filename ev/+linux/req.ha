@@ -7,7 +7,7 @@
 // for their own high-level operations, with a user data pointer and
 // cancellation semantics.
 //
-// Note that request objects are generally assumed to already be availble for
+// Note that request objects are generally assumed to already be available for
 // reuse during the user callback. Therefore, if the downstream request
 // implementation has a cleanup step following the callback, they should take
 // care not to treat any state stored on the request object as valid during this
