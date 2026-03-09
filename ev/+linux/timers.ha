@@ -75,7 +75,16 @@ export fn timer_configure(
 		it_interval = time::duration_to_timespec(repeat),
 		...
 	};
-	sys::timerfd_settime(file.fd, 0, &spec, null)!;
+	match (sys::timerfd_settime(file.fd, 0, &spec, null)) {
+	case int => void;
+	case let errno: sys::errno =>
+		switch (errno) {
+		case sys::EINVAL =>
+			abort("Invalid timeout values");
+		case sys::ECANCELED => void; // discontinuous clock changes
+		case => abort(); // unreachable
+		};
+	};
 
 	const was_armed = timer.delay != 0 || timer.repeat != 0;
 	const is_armed = delay != 0 || repeat != 0;
