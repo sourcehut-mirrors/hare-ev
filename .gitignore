@@ -1,1 +1,10 @@
 docs
+/child
+/dnsclient
+/hget
+/signal
+/tcpclient
+/tcpserv
+/timer
+/udpclient
+/udpserv
