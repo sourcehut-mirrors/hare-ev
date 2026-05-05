@@ -206,8 +206,15 @@ export fn dispatch(
 				abort("ev::dispatch: unexpected udata type");
 			};
 			signal_ready(sig, ev)?;
+		case sys::EVFILT_PROC =>
+			const child = match (udata) {
+			case let c: *opaque =>
+				yield c: *child;
+			case =>
+				abort("ev::dispatch: unexpected udata type");
+			};
+			wait_ready(child, ev);
 		case =>
-			// TODO: EVFILT_PROC
 			// TODO: EVFILT_READ/EVFILT_WRITE
 			abort("ev::dispatch: unsupported filter");
 		};
