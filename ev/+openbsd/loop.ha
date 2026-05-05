@@ -114,7 +114,7 @@ fn proc_blockq(loop: *loop) size = {
 export fn dispatch(
 	loop_: *loop,
 	timeout: time::duration = -1,
-) (bool | errors::error) = {
+) (bool | errors::error | nomem) = {
 	let ts: nullable *const sys::timespec = null;
 	if (timeout >= 0) {
 		let timespec = time::duration_to_timespec(timeout);
@@ -192,12 +192,21 @@ export fn dispatch(
 		switch (ev.filter) {
 		case sys::EVFILT_TIMER =>
 			const timer = match (udata) {
-			case let t: *opaque => yield t: *timer;
-			case => abort("ev::dispatch: unexpected udata type");
+			case let t: *opaque =>
+				yield t: *timer;
+			case =>
+				abort("ev::dispatch: unexpected udata type");
 			};
 			timer_ready(timer, ev)?;
+		case sys::EVFILT_SIGNAL =>
+			const sig = match (udata) {
+			case let s: *opaque =>
+				yield s: *signal;
+			case =>
+				abort("ev::dispatch: unexpected udata type");
+			};
+			signal_ready(sig, ev)?;
 		case =>
-			// TODO: EVFILT_SIGNAL
 			// TODO: EVFILT_PROC
 			// TODO: EVFILT_READ/EVFILT_WRITE
 			abort("ev::dispatch: unsupported filter");
@@ -209,7 +218,7 @@ export fn dispatch(
 
 // Runs the event loop (via [[dispatch]]) until all in-flight requests have been
 // processed, or [[stop]] is called, then returns.
-export fn run(loop_: *loop) (void | errors::error) = {
+export fn run(loop_: *loop) (void | errors::error | nomem) = {
 	for (loop_.nrequest != 0) {
 		if (!dispatch(loop_, -1)?) {
 			break;

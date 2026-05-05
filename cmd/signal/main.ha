@@ -16,7 +16,7 @@ export fn main() void = {
 		signal::sig::INT, signal::sig::TERM,
 	)!;
 	defer ev::signal_finish(&sig);
-	ev::handle(&sig, &on_signal);
+	ev::handle(&sig, &on_signal)!;
 
 	// Run loop until signal.
 	ev::run(&loop)!;

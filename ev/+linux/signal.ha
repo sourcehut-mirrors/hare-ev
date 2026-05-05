@@ -87,7 +87,7 @@ export fn signal_finish(sig: *signal) void = {
 export fn handle(
 	req: *signal,
 	cb: *signalcb,
-) void = {
+) (void | errors::error | nomem) = {
 	const file = file_req_init(req, &signal_cancel);
 	req.cb = cb;
 	file.signal = req;
