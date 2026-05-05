@@ -6,6 +6,14 @@ use time;
 // A callback which executes when a timer expires.
 export type timercb = fn(req: *timer, user: nullable *opaque) void;
 
+// Determines how the timer behaves after expiring.
+export type timer_mode = enum {
+	// Expire once and stop ticking.
+	ONESHOT,
+	// Expire in repeating intervals until explicitly [[cancel]led.
+	REPEATING,
+};
+
 export type timer = struct {
 	req,
 	cb: nullable *timercb,
@@ -55,10 +63,30 @@ export fn timer_finish(timer: *timer) void = {
 };
 
 // Configures a timer created with [[timer_init]] to expire after the given
+// "interval". mode controls whether the timer fires once or repeatedly.
+export fn timer_configure(
+	timer: *timer,
+	interval: time::duration,
+	mode: timer_mode,
+) (void | errors::error) = {
+	const repeat = switch (mode) {
+	case timer_mode::ONESHOT =>
+		yield 0: time::duration;
+	case timer_mode::REPEATING =>
+		yield interval;
+	};
+	return timer_configure_dual(timer, interval, repeat);
+};
+
+// Configures a timer created with [[timer_init]] to expire after the given
 // "delay" and indefinitely thereafter following each interval of "repeat".
 // Setting both values to zero disarms the timer; setting either value non-zero
 // arms the timer.
-export fn timer_configure(
+//
+// Note: this function is Linux-specific and non-portable. Other platforms do
+// not support a timer with different initial and repeat intervals. For
+// portable code, use [[timer_configure]] instead.
+export fn timer_configure_dual(
 	timer: *timer,
 	delay: time::duration,
 	repeat: time::duration,
@@ -172,5 +200,5 @@ fn timer_ready(file: *file, ev: *sys::epoll_event) void = {
 
 fn timer_cancel(req: *req) void = {
 	let timer = req: *timer;
-	timer_configure(timer, 0, 0)!;
+	timer_configure_dual(timer, 0, 0)!;
 };
