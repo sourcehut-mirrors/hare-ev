@@ -29,7 +29,6 @@ export type sendcb = fn(
 export type dgramreq = struct {
 	req,
 	buf: []u8,
-	amt: size,
 	dest: ip::addr,
 	port: u16,
 	union {
@@ -140,9 +139,6 @@ fn recv_cancel(req: *req) void = {
 };
 
 // Sends a datagram to a socket (connected with e.g. [[connect_udp]]).
-//
-// The underlying operation will call [[net::send]] as many times as necessary
-// to write out the entire buffer before running the callback.
 export fn send(
 	req: *dgramreq,
 	buf: []u8,
@@ -150,7 +146,6 @@ export fn send(
 ) void = {
 	const file = file_req_init(req, &send_cancel);
 	req.buf = buf;
-	req.amt = 0;
 	req.sendcb = cb;
 	file_begin(file, req, op::SEND);
 };
@@ -165,18 +160,14 @@ fn send_ready(
 	const cb = req.sendcb as *sendcb;
 	const r = match (udp::send(sock.fd, req.buf)) {
 	case let n: size =>
-		req.amt += n;
-		req.buf = req.buf[n..];
-		if (len(req.buf) != 0) {
-			return;
-		};
-		yield req.amt;
+		assert(n == len(req.buf));
+		yield n;
 	case let err: net::error =>
 		yield err;
 	};
 
 	file_req_finish(req, &sock.writeq);
-	cb(req, len(req.buf), req.user);
+	cb(req, r, req.user);
 	file_end(sock, op::SEND);
 };
 
@@ -188,9 +179,6 @@ fn send_cancel(req: *req) void = {
 };
 
 // Schedules a send operation on a socket.
-//
-// The underlying operation will call [[net::sendto]] as many times as necessary
-// to write out the entire buffer before running the callback.
 export fn sendto(
 	req: *dgramreq,
 	buf: []u8,
@@ -200,7 +188,6 @@ export fn sendto(
 ) void = {
 	const file = file_req_init(req, &sendto_cancel);
 	req.buf = buf;
-	req.amt = 0;
 	req.dest = dest;
 	req.port = port;
 	req.sendcb = cb;
@@ -217,18 +204,14 @@ fn sendto_ready(
 	const cb = req.sendcb as *sendcb;
 	const r = match (udp::sendto(sock.fd, req.buf, req.dest, req.port)) {
 	case let n: size =>
-		req.amt += n;
-		req.buf = req.buf[n..];
-		if (len(req.buf) != 0) {
-			return;
-		};
-		yield req.amt;
+		assert(n == len(req.buf));
+		yield n;
 	case let err: net::error =>
 		yield err;
 	};
 
 	file_req_finish(req, &sock.writeq);
-	cb(req, len(req.buf), req.user);
+	cb(req, r, req.user);
 	file_end(sock, op::SENDTO);
 };
 
