@@ -49,7 +49,7 @@ export fn main() void = {
 	const sig = ev::signal_init(&loop, &state,
 		signal::sig::INT, signal::sig::TERM)!;
 	defer ev::signal_finish(&sig);
-	ev::handle(&sig, &on_signal);
+	ev::handle(&sig, &on_signal)!;
 
 	log::println("Listening on 127.0.0.1:12345");
 	ev::run(&loop)!;

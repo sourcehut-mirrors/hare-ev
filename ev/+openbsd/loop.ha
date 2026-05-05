@@ -14,16 +14,13 @@ export type ondispatch = struct {
 	loop: *loop,
 };
 
-// TODO: Temporary placeholder for req.ha.
-// TODO: Will be implemented with I/O.
-export type file = bool;
-
 export type loop = struct {
 	fd: io::file,
 	events: []sys::kevent,
 	dispatch: []*ondispatch,
 	nrequest: uint,
 	flags: loop_flag,
+	closeq: file_list,
 };
 
 export type loop_flag = enum uint {
@@ -49,6 +46,7 @@ export fn newloop(events: size = 256) (loop | nomem | errors::error) = {
 		fd = fd,
 		events = alloc([sys::kevent { ... }], events)?,
 		flags = loop_flag::NONE,
+		closeq = file_list { ... },
 		...
 	};
 };
@@ -93,8 +91,12 @@ export fn do(
 };
 
 fn proc_closeq(loop: *loop) void = {
-	// TODO: Will be implemented with I/O.
-	return;
+	for (loop.closeq.tail != null) {
+		const link = loop.closeq.tail: *file_list;
+		const file = file_list_get_file(link);
+		file_unlink(&loop.closeq, &file.link);
+		_unregister(file);
+	};
 };
 
 fn proc_blockq(loop: *loop) size = {
@@ -183,6 +185,8 @@ export fn dispatch(
 		return true;
 	};
 
+	sort::sort(loop_.events[..nevent], size(sys::kevent), &sort_events)!;
+
 	for (let ev &.. loop_.events[..nevent]) {
 		let udata = ev.udata;
 		if (udata == null) {
@@ -214,8 +218,62 @@ export fn dispatch(
 				abort("ev::dispatch: unexpected udata type");
 			};
 			wait_ready(child, ev);
+		case sys::EVFILT_READ =>
+			const file = match (udata) {
+			case let f: *opaque =>
+				yield f: *file;
+			case =>
+				abort("ev::dispatch: unexpected udata type");
+			};
+			if (file.flags & fflags::CLOSING != 0) {
+				continue;
+			};
+			const pending = file.op;
+			if (pending & op::READV != 0) {
+				readv_ready(file);
+			};
+			if (pending & op::RECV != 0) {
+				recv_ready(file, ev);
+			};
+			if (pending & op::RECVFROM != 0) {
+				recvfrom_ready(file, ev);
+			};
+			if (pending & op::READABLE != 0) {
+				readable_ready(file);
+			};
+			if (pending & ~op::RW_MASK == op::ACCEPT) {
+				accept_ready(file, ev);
+			};
+		case sys::EVFILT_WRITE =>
+			const file = match (udata) {
+			case let f: *opaque =>
+				yield f: *file;
+			case =>
+				abort("ev::dispatch: unexpected udata type");
+			};
+			if (file.flags & fflags::CLOSING != 0) {
+				continue;
+			};
+			const pending = file.op;
+			if (pending & op::WRITEV != 0) {
+				writev_ready(file);
+			};
+			if (pending & op::SEND != 0) {
+				send_ready(file, ev);
+			};
+			if (pending & op::SENDTO != 0) {
+				sendto_ready(file, ev);
+			};
+			if (pending & op::WRITABLE != 0) {
+				writable_ready(file);
+			};
+			if (pending & ~op::RW_MASK == op::CONNECT_TCP) {
+				connect_tcp_ready(file, ev);
+			};
+			if (pending & ~op::RW_MASK == op::CONNECT_UNIX) {
+				connect_unix_ready(file, ev);
+			};
 		case =>
-			// TODO: EVFILT_READ/EVFILT_WRITE
 			abort("ev::dispatch: unsupported filter");
 		};
 	};
