@@ -141,8 +141,11 @@ fn writev_proc(req: *ioreq, file: *file) (size | io::error) = {
 	let n = io::writev(file.fd, req.vec...)?;
 	req.amt += n;
 
-	for (len(req.vec) > 0 && n >= len(req.vec)) {
+	for (len(req.vec) > 0) {
 		const buf = io::vector_buf(&req.vec[0]);
+		if (n < len(buf)) {
+			break;
+		};
 		n -= len(buf);
 		req.vec = req.vec[1..];
 	};
