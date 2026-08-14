@@ -152,8 +152,6 @@ fn connect_tcp_ready(
 		cb(req, errors::errno(errno), req.user);
 		close(sock);
 	} else {
-		const fl = sys::fcntl(sock.fd, sys::F_GETFL, void)!;
-		sys::fcntl(sock.fd, sys::F_SETFL, fl & ~sys::O_NONBLOCK)!;
 		cb(req, sock, req.user);
 	};
 };
@@ -197,8 +195,6 @@ fn connect_unix_ready(
 		cb(req, errors::errno(errno), req.user);
 		close(sock);
 	} else {
-		const fl = sys::fcntl(sock.fd, sys::F_GETFL, void)!;
-		sys::fcntl(sock.fd, sys::F_SETFL, fl & ~sys::O_NONBLOCK)!;
 		cb(req, sock, req.user);
 	};
 };
