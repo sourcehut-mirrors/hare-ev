@@ -120,21 +120,28 @@ export fn writev(
 fn writev_ready(file: *file) void = {
 	assert(file.op & op::WRITE_MASK == op::WRITEV);
 	let req = file_get_request(&file.writeq): *ioreq;
-
-	const cb = req.writecb as *writecb;
-	const r = match (writev_proc(req, file)) {
-	case size =>
-		if (len(req.vec) != 0) {
-			return;
+	for (true) {
+		const cb = req.writecb as *writecb;
+		const r = match (writev_proc(req, file)) {
+		case size =>
+			if (len(req.vec) != 0) {
+				return;
+			};
+			yield req.amt;
+		case let err: io::error =>
+			yield err;
 		};
-		yield req.amt;
-	case let err: io::error =>
-		yield err;
-	};
 
-	file_req_finish(req, &file.writeq);
-	cb(req, r, req.user);
-	file_end(file, op::WRITEV);
+		file_req_finish(req, &file.writeq);
+		cb(req, r, req.user);
+		file_end(file, op::WRITEV);
+
+		if (!req_list_empty(&file.writeq)) {
+			req = file_get_request(&file.writeq): *ioreq;
+			continue;
+		};
+		break;
+	};
 };
 
 fn writev_proc(req: *ioreq, file: *file) (size | io::error) = {
