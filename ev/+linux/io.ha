@@ -80,6 +80,9 @@ fn readv_ready(file: *file) void = {
 	cb(req, r, req.user);
 
 	file_end(file, op::READV);
+	if (!req_list_empty(&file.readq)) {
+		file_epoll_ctl(file);
+	};
 };
 
 fn readv_cancel(req: *req) void = {

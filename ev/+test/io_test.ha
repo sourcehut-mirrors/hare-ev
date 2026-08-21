@@ -130,3 +130,65 @@ fn iotest_consecutive_writes(
 	assert(r is size, "write failed");
 	state.wrote = true;
 };
+
+@test fn io_consecutive_reads() void = {
+	let loop = newloop()!;
+	defer finish(&loop);
+
+	const (rd, wr) = unix::pipe(unix::pipe_flag::NONBLOCK)!;
+	const rx = register(&loop, rd)!;
+	defer close(rx);
+	const tx = register(&loop, wr)!;
+	defer close(tx);
+
+	const total = 1024z * 2;
+	let payload = alloc([0u8...], total)!;
+	defer free(payload);
+	for (let i = 0z; i < total; i += 1) {
+		payload[i] = (i): u8;
+	};
+
+	let rbuf = alloc([0u8...], 8192)!;
+	defer free(rbuf);
+
+	let state = test_userdata {
+		total = total,
+		rbuf = rbuf,
+		...
+	};
+
+	let rreq1 = ioreq_init(rx, &state);
+	read(&rreq1, rbuf[..1024], &iotest_consecutive_reads);
+
+	let rreq2 = ioreq_init(rx, &state);
+	read(&rreq2, rbuf[..1024], &iotest_consecutive_reads);
+
+	let wreq1 = ioreq_init(tx, &state);
+	write(&wreq1, payload[..1024], &iotest_consecutive_writes);
+
+	let wreq2 = ioreq_init(tx, &state);
+	write(&wreq2, payload[1024..1024 * 2], &iotest_consecutive_writes);
+
+	run(&loop)!;
+
+	assert(state.wrote, "write callback did not fire");
+	assert(state.complete, "read did not complete");
+};
+
+fn iotest_consecutive_reads(
+	req: *ioreq,
+	r: (size | io::EOF | io::error),
+	user: nullable *opaque,
+) void = {
+	const state = user: *test_userdata;
+	const n = r as size;
+	for (let i = 0z; i < n; i += 1) {
+		assert(state.rbuf[i] == ((state.off + i)): u8,
+			"payload corrupted");
+	};
+
+	state.off += n;
+	if (state.off == state.total) {
+		state.complete = true;
+	};
+};
