@@ -138,7 +138,7 @@ fn writev_ready(file: *file) void = {
 	const r = match (writev_proc(req, file)) {
 	case size =>
 		if (len(req.vec) != 0) {
-			file_rearm(file);
+			file_epoll_ctl(file);
 			return;
 		};
 		yield req.amt;
