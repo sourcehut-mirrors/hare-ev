@@ -1,0 +1,22 @@
+image: alpine/edge
+packages:
+  - qbe # for harec
+  - scdoc # for hare
+sources:
+  - https://git.sr.ht/~sircmpwn/harec
+  - https://git.sr.ht/~sircmpwn/hare
+  - https://git.sr.ht/~sircmpwn/hare-ev
+tasks:
+  - harec: |
+      cd harec
+      cp configs/linux.mk config.mk
+      make
+      doas make install
+  - hare: |
+      cd hare
+      cp configs/linux.mk config.mk
+      make
+      doas make install
+  - check: |
+      cd hare-ev
+      make check

@@ -12,8 +12,20 @@ THIRDPARTYDIR=$(HARESRCDIR)/third-party
 
 all:
 
-check:
+check: examples
 	$(HARE) test
+	$(HARE) run cmd/child true
+
+examples:
+	$(HARE) build ./cmd/child
+	$(HARE) build ./cmd/dnsclient
+	$(HARE) build ./cmd/hget
+	$(HARE) build ./cmd/signal
+	$(HARE) build ./cmd/tcpclient
+	$(HARE) build ./cmd/tcpserv
+	$(HARE) build ./cmd/timer
+	$(HARE) build ./cmd/udpclient
+	$(HARE) build ./cmd/udpserv
 
 docs:
 	mkdir -p docs/ev docs/ev/dial docs/ev/dns
@@ -39,4 +51,4 @@ install:
 uninstall:
 	rm -rf $(DESTDIR)$(THIRDPARTYDIR)/ev
 
-.PHONY: all docs clean check install uninstall
+.PHONY: all docs clean check examples install uninstall
