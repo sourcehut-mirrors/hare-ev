@@ -238,6 +238,9 @@ export fn dispatch(
 			if (pending & op::RECVFROM != 0) {
 				recvfrom_ready(file, ev);
 			};
+			if (pending & op::RECVMSG != 0) {
+				recvmsg_ready(file);
+			};
 			if (pending & op::READABLE != 0) {
 				readable_ready(file);
 			};
@@ -263,6 +266,9 @@ export fn dispatch(
 			};
 			if (pending & op::SENDTO != 0) {
 				sendto_ready(file, ev);
+			};
+			if (pending & op::SENDMSG != 0) {
+				sendmsg_ready(file);
 			};
 			if (pending & op::WRITABLE != 0) {
 				writable_ready(file);

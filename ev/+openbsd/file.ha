@@ -9,11 +9,13 @@ export type op = enum u32 {
 	RECV      = 1 << 1,
 	RECVFROM  = 1 << 2,
 	READABLE  = 1 << 3,
+	RECVMSG   = 1 << 4,
 	READ_MASK = 0xFF,
 
 	WRITEV     = 1 << 8,
 	SEND       = 1 << 9,
 	SENDTO     = 1 << 10,
+	SENDMSG    = 1 << 11,
 	WRITABLE   = 2 << 11,
 	WRITE_MASK = 0xFF00,
 
@@ -281,6 +283,9 @@ fn sort_events(a: const *opaque, b: const *opaque) int = {
 
 	return fa.prio - fb.prio;
 };
+
+// kqueue filters are level-triggered; this is a no-op.
+fn file_rearm(file: *file) void = void;
 
 // Set up kevent filters for a given file.
 fn file_kevent_ctl(file: *file) void = {

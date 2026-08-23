@@ -263,6 +263,10 @@ export fn dispatch(
 				&& file.op & op::RECVFROM != 0) {
 			recvfrom_ready(file, ev);
 		};
+		if (ev.events & (sys::EPOLLIN | sys::EPOLLHUP) != 0
+				&& file.op & op::RECVMSG != 0) {
+			recvmsg_ready(file);
+		};
 		if (ev.events & (sys::EPOLLOUT | sys::EPOLLHUP) != 0
 				&& file.op & op::SEND != 0) {
 			send_ready(file, ev);
@@ -270,6 +274,10 @@ export fn dispatch(
 		if (ev.events & (sys::EPOLLOUT | sys::EPOLLHUP) != 0
 				&& file.op & op::SENDTO != 0) {
 			sendto_ready(file, ev);
+		};
+		if (ev.events & (sys::EPOLLOUT | sys::EPOLLHUP) != 0
+				&& file.op & op::SENDMSG != 0) {
+			sendmsg_ready(file);
 		};
 
 		switch (pending) {

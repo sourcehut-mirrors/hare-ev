@@ -12,11 +12,13 @@ export type op = enum u32 {
 	RECV      = 1 << 1,
 	RECVFROM  = 1 << 2,
 	READABLE  = 1 << 3,
+	RECVMSG   = 1 << 4,
 	READ_MASK = 0xFF,
 
 	WRITEV     = 1 << 8,
 	SEND       = 1 << 9,
 	SENDTO     = 1 << 10,
+	SENDMSG    = 1 << 11,
 	WRITABLE   = 2 << 11,
 	WRITE_MASK = 0xFF00,
 
@@ -310,6 +312,11 @@ fn sort_events(a: const *opaque, b: const *opaque) int = {
 	return a.prio - b.prio;
 };
 
+// Re-arms a file for its currently-pending operations.
+fn file_rearm(file: *file) void = {
+	file_epoll_ctl(file);
+};
+
 // Updates epoll events for a given file. For internal use.
 fn file_epoll_ctl(file: *file) void = {
 	let events = sys::EPOLLONESHOT;
@@ -317,7 +324,7 @@ fn file_epoll_ctl(file: *file) void = {
 	switch (file.op & op::READ_MASK) {
 	case op::READV, op::READABLE =>
 		events |= sys::EPOLLIN | sys::EPOLLHUP;
-	case op::RECV, op::RECVFROM =>
+	case op::RECV, op::RECVFROM, op::RECVMSG =>
 		events |= sys::EPOLLIN;
 	case => void;
 	};
@@ -325,7 +332,7 @@ fn file_epoll_ctl(file: *file) void = {
 	switch (file.op & op::WRITE_MASK) {
 	case op::WRITEV, op::WRITABLE =>
 		events |= sys::EPOLLOUT | sys::EPOLLHUP;
-	case op::SEND, op::SENDTO =>
+	case op::SEND, op::SENDTO, op::SENDMSG =>
 		events |= sys::EPOLLOUT;
 	case => void;
 	};
