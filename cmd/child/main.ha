@@ -1,14 +1,8 @@
-use errors;
 use ev;
 use fmt;
 use os;
 use os::exec;
 use time;
-
-type state = struct {
-	child: ev::child,
-	timer: ev::timer,
-};
 
 export fn main() void = {
 	const loop = ev::newloop()!;
