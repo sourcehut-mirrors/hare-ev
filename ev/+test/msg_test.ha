@@ -88,7 +88,7 @@ fn on_msgtest_recv(
 	assert(n == 5);
 	assert(bytes::equal(state.rbuf[..n], want), "wrong payload");
 
-	const files = net::unix::recvfiles(msg, 1);
+	const files = net::unix::recvfiles(msg, 1)!;
 	assert(len(files) == 1, "no descriptor received");
 	let got: [1]u8 = [0];
 	assert(io::read(files[0], got) as size == 1, "short read");
@@ -199,7 +199,7 @@ fn on_parttest_recv(
 			"payload corrupted");
 	};
 
-	const files = net::unix::recvfiles(msg, 1);
+	const files = net::unix::recvfiles(msg, 1)!;
 	state.fdcount += len(files);
 	for (let i = 0z; i < len(files); i += 1) {
 		let got: [1]u8 = [0];
